@@ -25,7 +25,8 @@ def main():
                 # Stworzenie i serializacja wiadomości protobuf
                 file_response = file_with_name_msg_pb2.FileResponse()
                 file_response.filename = "test_file.txt"
-                file_response.filedata = b"Hello from file sent from server"
+                with open("gfs.png", "rb") as photo_file:
+                    file_response.filedata = photo_file.read()
 
                 protobuf_data = file_response.SerializeToString()
 
