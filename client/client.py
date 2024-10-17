@@ -13,7 +13,7 @@ def receive_message(sock, length):
 
 def main():
     # Parametry
-    SERVER_IP = '127.0.0.1'
+    SERVER_IP = '192.168.0.38'
     SERVER_PORT = 8000
 
     # Tworzenie socketu TCP

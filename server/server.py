@@ -3,8 +3,9 @@ import file_with_name_msg_pb2
 
 def main():
     # Parametry
-    SERVER_IP = '127.0.0.1'
-    SERVER_PORT = 12345
+    FILENAME = "test_file.txt"
+    SERVER_IP = '192.168.0.38'
+    SERVER_PORT = 8000
 
     # Tworzenie socketu TCP
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -24,7 +25,7 @@ def main():
 
                 # Stworzenie i serializacja wiadomości protobuf
                 file_response = file_with_name_msg_pb2.FileResponse()
-                file_response.filename = "test_file.txt"
+                file_response.filename = FILENAME
                 with open("gfs.png", "rb") as photo_file:
                     file_response.filedata = photo_file.read()
 
