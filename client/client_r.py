@@ -27,9 +27,10 @@ def main():
         Replica("Replica2", "192.168.1.2", 8081, 2, False),
         Replica("Replica3", "192.168.1.3", 8082, 3, False),
     ]
+    chunk_nr = 2
+    msg_length = 2
+    chunk_length = 67108864
 
-
-    # Parametry
     SERVER_IP = replicas[0].ip
     SERVER_PORT = replicas[0].port
 
@@ -40,35 +41,19 @@ def main():
             client_socket.connect((SERVER_IP, SERVER_PORT))
             print(f"Connected to server {SERVER_IP}:{SERVER_PORT}")
 
-            # Wysyłanie wiadomości
-            message = "Give me a file please :)"
-            client_socket.sendall(message.encode())
-            print("Message sent to server:", message)
+            client_socket.sendall(str(chunk_nr).encode())
+            print("Message sent to server:", chunk_nr)
 
-            # # Odbieranie rozmiaru wiadomości
-            # raw_msg_length = receive_message(client_socket, 4)
-            # if raw_msg_length is None:
-            #     print("Error: No data received.")
-            #     return
-
-            # msg_length = int.from_bytes(raw_msg_length, byteorder='big')
-            # print(f"Incoming message size: {msg_length} bytes")
-
-            # # Odebranie właściwej wiadomości
-            # protobuf_data = receive_message(client_socket, msg_length)
-            # if protobuf_data is None:
-            #     print("Error: No data received.")
-            #     return
-
-            # # Parsowanie wiadomości
-            # file_response = file_with_name_msg_pb2.FileResponse()
-            # file_response.ParseFromString(protobuf_data)
-
-            # # Zapisanie pliku na dysk
-            # with open(file_response.filename, 'wb') as f:
-            #     f.write(file_response.filedata)
-            #     print(f"File '{file_response.filename}' saved successfully.")
-
+            response_data = receive_message(client_socket, msg_length)
+            if response_data.decode() == "no":
+                print("Error: no ok")
+                return
+            chunk_data = receive_message(client_socket, chunk_length)
+            print("Received message:",chunk_data.decode())
+        except socket.error as e:
+            print(f"Socket error: {e}")
+        except ConnectionError as ce:
+            print(ce)
         except Exception as e:
             print(f"Error: {e}")
 
