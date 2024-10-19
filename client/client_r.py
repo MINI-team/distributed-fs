@@ -23,9 +23,9 @@ class Replica:
 def main():
     # Creating an array (list) of Replica objects
     replicas = [
-        Replica("Replica1", "192.168.0.38", 8000, 1, True),
-        Replica("Replica2", "192.168.1.2", 8081, 2, False),
-        Replica("Replica3", "192.168.1.3", 8082, 3, False),
+        Replica("Replica1", "1.2.3.4", 8000, 1, True),
+        Replica("Replica2", "1.2.3.4", 8081, 2, False),
+        Replica("Replica3", "1.2.3.4", 8082, 3, False),
     ]
     chunk_nr = 2
     msg_length = 2
