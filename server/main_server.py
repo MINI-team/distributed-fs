@@ -1,6 +1,7 @@
 import socket
 import file_with_name_msg_pb2
 import file_request_pb2
+import replicas_response_pb2
 
 # Parametry sieciowe
 SERVER_IP = '127.0.0.1'
@@ -9,6 +10,8 @@ SERVER_PORT = 8000
 # Parametry haszowania
 BASE = 113
 MOD = int(1e9) + 7
+
+CHUNK_SIZE = int(1<<26)
 
 def get_hash(path):
     if(type(path) != str or len(path) < 1):
@@ -63,23 +66,40 @@ def seed_files(paths):
     # print(paths[0])
     # print(paths[1])
 
-    replica_list = list()
-    replica_list.append(
-        Replica(servers[0], get_hash(paths[0]), True), # the chunk id probably should be sth else,
+    chunk_id_1 = get_hash(paths[0]) + 1
+    chunk_id_2 = get_hash(paths[0]) + 2
+
+    replica_list_1 = list()
+    replica_list_1.append(
+        Replica(servers[0], chunk_id_1, True), # the chunk id probably should be sth else,
         # either a global, incremented value or a hash of the path combined with the chunk number in a file
     )
 
-    replica_list.append(
-        Replica(servers[1], get_hash(paths[0]), True),
+    replica_list_1.append(
+        Replica(servers[1], chunk_id_1, False),
     )
 
-    replica_list.append(
-        Replica(servers[2], get_hash(paths[0]), True),
+    replica_list_1.append(
+        Replica(servers[2], chunk_id_1, False),
     )
 
-    # print(get_hash(paths[0]))
+    replica_list_2 = list()
+    replica_list_2.append(
+        Replica(servers[0], chunk_id_2, True), # the chunk id probably should be sth else,
+        # either a global, incremented value or a hash of the path combined with the chunk number in a file
+    )
 
-    file_map[paths[0]] = replica_list
+    replica_list_2.append(
+        Replica(servers[1], chunk_id_2, False),
+    )
+
+    replica_list_2.append(
+        Replica(servers[2], chunk_id_2, False),
+    )
+
+    # print(chunk_id)
+
+    file_map[paths[0]] = [replica_list_1, replica_list_2]
 
     # print(file_map)
 
@@ -114,22 +134,48 @@ def receive_request(sock):
     print(file_request)
 
 def get_replicas(file_hash, path, offset, size):
-    file_map[path]    
+    print(CHUNK_SIZE)
+    replica_list = file_map[path][int(offset / CHUNK_SIZE)]
+    print(replica_list[0].server.ip)
+
+    replica1 = replicas_response_pb2.Replica()
+    replica1.name = path
+
+    replicas_response = replicas_response_pb2.ReplicaList(replicas=[replica1])
+
+    protobuf_data = replicas_response.SerializeToString()
+    
+    return protobuf_data
+
+    # file_request.
 
 def main():
     # print(get_hash("/home/piotr/Desktop/photo2.png"))
     seed_servers()
-    seed_files(["/usr/piotr/Desktop/photo1.png"])
-    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-    #     server_sock.bind((SERVER_IP, SERVER_PORT))
-    #     server_sock.listen(1)
-    #     print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
 
-    #     while True:
-    #         conn, addr = server_sock.accept()
-    #         with conn:
-    #             print(f"Connection established with {addr}")
+    file_1 = "/usr/piotr/Desktop/photo1.png"
+    seed_files([file_1])
 
-    #             receive_request(conn)
+    protobuf_data = get_replicas(get_hash(file_1), file_1, 0, CHUNK_SIZE)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
+        server_sock.bind((SERVER_IP, SERVER_PORT))
+        server_sock.listen(1)
+        print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
+
+        while True:
+            conn, addr = server_sock.accept()
+            with conn:
+                print(f"Connection established with {addr}")
+
+                receive_request(conn)
+
+                msg_length = len(protobuf_data)
+                conn.sendall(msg_length.to_bytes(4, byteorder='big'))
+
+                # Wysłanie samej wiadomości
+                conn.sendall(protobuf_data)
+                print(f"Sent message to client.")
+
 
 main()
