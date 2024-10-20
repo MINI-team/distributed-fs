@@ -2,9 +2,13 @@ import socket
 import file_with_name_msg_pb2
 import file_request_pb2
 
-# Parametry
+# Parametry sieciowe
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 8000
+
+# Parametry haszowania
+BASE = 113
+MOD = int(1e9) + 7
 
 servers = []
 
@@ -66,17 +70,35 @@ def receive_request(sock):
 
     print(file_request)
 
+def get_hash(path):
+    print(type(path))
+    if(type(path) != str or len(path) < 1):
+        print("Error (in hashing function): Not a valid path.")
+        return
+
+    print("MOD:", MOD)
+    print("Length of the path:", len(path))
+
+    hash = ord(path[0])
+
+    print("Hash of first letter:", hash)
+    for i in range(1, len(path)):
+        hash = (hash * BASE + ord(path[i])) % MOD
+    
+    return hash
+
 def main():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind((SERVER_IP, SERVER_PORT))
-        server_sock.listen(1)
-        print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
+    print(get_hash("/home/piotr/Desktop/photo2.png"))
+    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
+    #     server_sock.bind((SERVER_IP, SERVER_PORT))
+    #     server_sock.listen(1)
+    #     print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
 
-        while True:
-            conn, addr = server_sock.accept()
-            with conn:
-                print(f"Connection established with {addr}")
+    #     while True:
+    #         conn, addr = server_sock.accept()
+    #         with conn:
+    #             print(f"Connection established with {addr}")
 
-                receive_request(conn)
+    #             receive_request(conn)
 
 main()
