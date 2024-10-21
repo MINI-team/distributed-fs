@@ -97,12 +97,14 @@ def send_file_request(path, offset, size):
             replicas_response.ParseFromString(protobuf_data)
 
             print("Received message:", replicas_response)
+            print("Success?", replicas_response.success)
         
         except Exception as e:
             print(f"Error: {e}")
 
 def main():
-    send_file_request("/home/piotr/Pictures/gfs.png", 8000000, 2000000)
+    # send_file_request("/home/piotr/Pictures/gfs.png", 8000000, 2000000)
+    send_file_request("/home/piotr/Desktop/photo1.png", 8000000, 2000000)
     # simple_interaction()
 
 main()

@@ -1,3 +1,5 @@
+// protoc --python_out=. replicas_response.proto; cp replicas_response_pb2.py client; cp replicas_response_pb2.py server
+
 syntax = "proto3";
 
 message Replica {
@@ -9,5 +11,6 @@ message Replica {
 }
 
 message ReplicaList {
-  repeated Replica replica = 1;
+  bool success = 1;
+  repeated Replica replicas = 2;
 }

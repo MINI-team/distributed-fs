@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x17replicas_response.proto\"W\n\x07Replica\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\n\n\x02ip\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\x05\x12\x10\n\x08\x63hunk_id\x18\x04 \x01(\x05\x12\x12\n\nis_primary\x18\x05 \x01(\x08\")\n\x0bReplicaList\x12\x1a\n\x08replicas\x18\x01 \x03(\x0b\x32\x08.Replicab\x06proto3')
+  serialized_pb=_b('\n\x17replicas_response.proto\"W\n\x07Replica\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\n\n\x02ip\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\x05\x12\x10\n\x08\x63hunk_id\x18\x04 \x01(\x05\x12\x12\n\nis_primary\x18\x05 \x01(\x08\":\n\x0bReplicaList\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x1a\n\x08replicas\x18\x02 \x03(\x0b\x32\x08.Replicab\x06proto3')
 )
 
 
@@ -92,8 +92,15 @@ _REPLICALIST = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='replicas', full_name='ReplicaList.replicas', index=0,
-      number=1, type=11, cpp_type=10, label=3,
+      name='success', full_name='ReplicaList.success', index=0,
+      number=1, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='replicas', full_name='ReplicaList.replicas', index=1,
+      number=2, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -111,7 +118,7 @@ _REPLICALIST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=116,
-  serialized_end=157,
+  serialized_end=174,
 )
 
 _REPLICALIST.fields_by_name['replicas'].message_type = _REPLICA

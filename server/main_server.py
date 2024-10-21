@@ -1,4 +1,5 @@
 import socket
+import sys
 import file_with_name_msg_pb2
 import file_request_pb2
 import replicas_response_pb2
@@ -22,8 +23,6 @@ def get_hash(path):
 
     for i in range(1, len(path)):
         hash = (hash * BASE + ord(path[i])) % MOD
-    
-    # print("Hash:", hash)
 
     return hash
 
@@ -62,10 +61,6 @@ def seed_servers():
     )
 
 def seed_files(paths):
-    # print(servers[0])
-    # print(paths[0])
-    # print(paths[1])
-
     chunk_id_1 = get_hash(paths[0]) + 1
     chunk_id_2 = get_hash(paths[0]) + 2
 
@@ -97,11 +92,7 @@ def seed_files(paths):
         Replica(servers[2], chunk_id_2, False),
     )
 
-    # print(chunk_id)
-
     file_map[paths[0]] = [replica_list_1, replica_list_2]
-
-    # print(file_map)
 
 def receive_message(sock, length):
     """Helper function to receive exactly 'length' bytes from the socket."""
@@ -133,11 +124,17 @@ def receive_request(sock):
 
     print(file_request)
 
+    return file_request
+
 def get_replicas(file_hash, path, offset, size):
-    # print(CHUNK_SIZE)
     chunk_no = int(offset / CHUNK_SIZE)
+
+    if(path not in file_map):
+        replicas_response = replicas_response_pb2.ReplicaList(success=False, replicas=[])
+        protobuf_data = replicas_response.SerializeToString()
+        return protobuf_data
+
     replica_list = file_map[path][chunk_no]
-    # print(replica_list[0].server.ip)
 
     replicas_proto = []
 
@@ -151,7 +148,7 @@ def get_replicas(file_hash, path, offset, size):
         replica_proto.is_primary = replica.is_primary
         replicas_proto.append(replica_proto)
 
-    replicas_response = replicas_response_pb2.ReplicaList(replicas=replicas_proto)
+    replicas_response = replicas_response_pb2.ReplicaList(success = True, replicas=replicas_proto)
 
     protobuf_data = replicas_response.SerializeToString()
     
@@ -163,29 +160,41 @@ def main():
     # print(get_hash("/home/piotr/Desktop/photo2.png"))
     seed_servers()
 
-    file_1 = "/usr/piotr/Desktop/photo1.png"
+    file_1 = "/home/piotr/Desktop/photo1.png"
     seed_files([file_1])
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
-        server_sock.bind((SERVER_IP, SERVER_PORT))
-        server_sock.listen(1)
-        print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
+        conn = socket.socket()
+        try:
+            server_sock.bind((SERVER_IP, SERVER_PORT))
+            server_sock.listen(1)
+            print(f"Server listening on {SERVER_IP}:{SERVER_PORT}")
 
-        while True:
-            conn, addr = server_sock.accept()
-            with conn:
-                print(f"Connection established with {addr}")
+            while True:
+                conn, addr = server_sock.accept()
+                with conn:
+                    print(f"Connection established with {addr}")
 
-                receive_request(conn)
+                    req = receive_request(conn)
 
-                protobuf_data = get_replicas(get_hash(file_1), file_1, 0, CHUNK_SIZE)
+                    protobuf_data = get_replicas(get_hash(req.path), req.path, req.offset, req.size)
 
-                msg_length = len(protobuf_data)
-                conn.sendall(msg_length.to_bytes(4, byteorder='big'))
+                    msg_length = len(protobuf_data)
 
-                # Wysłanie samej wiadomości
-                conn.sendall(protobuf_data)
-                print(f"Sent message to client.")
+                    conn.sendall(msg_length.to_bytes(4, byteorder='big'))
+
+                    # Wysłanie samej wiadomości i zakończenie połączenia
+                    conn.sendall(protobuf_data)
+                    conn.close()
+
+                    print(f"Sent message to client.\nPress q to exit")
+                    char = sys.stdin.read(1)
+                    if(char == 'q'):
+                        return
+        except Exception as e:
+            print(f"Error: {e}")
+        
+        conn.close()
 
 
 main()
