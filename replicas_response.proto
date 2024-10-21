@@ -9,5 +9,5 @@ message Replica {
 }
 
 message ReplicaList {
-  repeated Replica replicas = 1;
+  repeated Replica replica = 1;
 }

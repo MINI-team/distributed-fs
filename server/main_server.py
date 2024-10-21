@@ -54,11 +54,11 @@ def seed_servers():
     )
 
     servers.append(
-        Server("Server B", "127.0.0.1", 8000)
+        Server("Server B", "127.0.0.2", 8000)
     )
     
     servers.append(
-        Server("Server C", "127.0.0.1", 8000)
+        Server("Server C", "127.0.0.3", 8000)
     )
 
 def seed_files(paths):
@@ -134,14 +134,24 @@ def receive_request(sock):
     print(file_request)
 
 def get_replicas(file_hash, path, offset, size):
-    print(CHUNK_SIZE)
-    replica_list = file_map[path][int(offset / CHUNK_SIZE)]
-    print(replica_list[0].server.ip)
+    # print(CHUNK_SIZE)
+    chunk_no = int(offset / CHUNK_SIZE)
+    replica_list = file_map[path][chunk_no]
+    # print(replica_list[0].server.ip)
 
-    replica1 = replicas_response_pb2.Replica()
-    replica1.name = path
+    replicas_proto = []
 
-    replicas_response = replicas_response_pb2.ReplicaList(replicas=[replica1])
+    for replica in replica_list:
+        print(replica.is_primary)
+        replica_proto = replicas_response_pb2.Replica()
+        replica_proto.name = path
+        replica_proto.ip = replica.server.ip
+        replica_proto.port = replica.server.port
+        replica_proto.chunk_id = get_hash(path) + chunk_no
+        replica_proto.is_primary = replica.is_primary
+        replicas_proto.append(replica_proto)
+
+    replicas_response = replicas_response_pb2.ReplicaList(replicas=replicas_proto)
 
     protobuf_data = replicas_response.SerializeToString()
     
@@ -156,8 +166,6 @@ def main():
     file_1 = "/usr/piotr/Desktop/photo1.png"
     seed_files([file_1])
 
-    protobuf_data = get_replicas(get_hash(file_1), file_1, 0, CHUNK_SIZE)
-
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
         server_sock.bind((SERVER_IP, SERVER_PORT))
         server_sock.listen(1)
@@ -169,6 +177,8 @@ def main():
                 print(f"Connection established with {addr}")
 
                 receive_request(conn)
+
+                protobuf_data = get_replicas(get_hash(file_1), file_1, 0, CHUNK_SIZE)
 
                 msg_length = len(protobuf_data)
                 conn.sendall(msg_length.to_bytes(4, byteorder='big'))
