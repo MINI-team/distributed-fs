@@ -12,7 +12,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #ifndef TEMP_FAILURE_RETRY
 #define TEMP_FAILURE_RETRY(expression)             \
@@ -25,12 +27,14 @@
     }))
 #endif
 
-#define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
+#define ERR(source) (perror(source), fprintf(stdout, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 #define BACKLOG 3
 #define MAX_EVENTS 16
 #define PORT 8000
-#define ADDRESS "192.168.0.38"
-#define BUFFER_SIZE 1024
+#define ADDRESS "1.2.3.4"
+#define BINARY_NUMBER_LENGTH 32
+#define CHUNK_SIZE 10
+#define NUMBER_OF_CHUNKS 48
 
 volatile sig_atomic_t do_work = 1;
 
@@ -138,6 +142,57 @@ ssize_t bulk_write(int fd, char *buf, size_t count)
     return len;
 }
 
+void initialize_responses(char* responses[]) {
+    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
+            responses[i] = (char*)malloc(CHUNK_SIZE);
+            if (responses[i] == NULL) {
+                perror("Memory allocation failed");
+                exit(EXIT_FAILURE);
+            }
+            snprintf(responses[i], CHUNK_SIZE, "Some data");
+    }
+}
+
+void print_responses(char* responses[]) {
+    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
+        if (responses[i] != NULL) {
+            printf("Response %d: %s\n", i, responses[i]);
+        } else {
+            printf("Response %d is NULL\n", i);
+        }
+    }
+}
+
+void free_responses(char* responses[]) {
+    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
+        if (responses[i] != NULL) {
+            free(responses[i]);
+        }
+    }
+}
+
+int binary_to_int(const char *binary_number) {
+    int result = 0;
+    for (int i = 0; i < BINARY_NUMBER_LENGTH; i++) {
+        result = (result << 1) | (binary_number[i] - '0');
+    }
+
+    return result;
+}
+void int_to_binary_string(int number, char *binary_str) {
+    for (int i = 0; i < BINARY_NUMBER_LENGTH; i++) {
+        binary_str[BINARY_NUMBER_LENGTH - i - 1] = (number & 1) ? '1' : '0';
+        number >>= 1; 
+    }
+}
+
+void print_char_array(const char array[], int length) {
+    for (int i = 0; i < length; i++) {
+        printf("%c", array[i]);
+    }
+    printf("\n"); 
+}
+
 void doServer(int tcp_listen_socket)
 {
     int epoll_descriptor;
@@ -156,7 +211,22 @@ void doServer(int tcp_listen_socket)
     }
 
     int nfds;
-    char buffer[BUFFER_SIZE]; // Buffer for storing the received string
+    char message_length_binary[BINARY_NUMBER_LENGTH];
+    int message_length;
+    char chunk_number_binary[BINARY_NUMBER_LENGTH];
+    int chunk_number_int;
+    char* responses[NUMBER_OF_CHUNKS];
+    initialize_responses(responses);
+    char *ok_response = "ok";
+    char *not_ok_response = "not ok";
+    int ok_response_length_int = strlen(ok_response);
+    int not_ok_response_length_int = strlen(not_ok_response);
+    char ok_response_length_binary[BINARY_NUMBER_LENGTH];
+    char not_ok_response_length_binary[BINARY_NUMBER_LENGTH];
+    int_to_binary_string(ok_response_length_int, ok_response_length_binary);
+    int_to_binary_string(not_ok_response_length_int, not_ok_response_length_binary);
+    print_char_array(ok_response_length_binary, BINARY_NUMBER_LENGTH);
+    print_char_array(not_ok_response_length_binary, BINARY_NUMBER_LENGTH);
     ssize_t size;
     sigset_t mask, oldmask;
     sigemptyset(&mask);
@@ -169,13 +239,55 @@ void doServer(int tcp_listen_socket)
             for (int n = 0; n < nfds; n++)
             {
                 int client_socket = add_new_client(events[n].data.fd);
-                if ((size = bulk_read(client_socket, buffer, BUFFER_SIZE - 1)) < 0)
+                printf("New client was connected\n");
+
+                if ((size = bulk_read(client_socket, chunk_number_binary, BINARY_NUMBER_LENGTH)) < 0)
                     ERR("read:");
-                if (size > 0)
-                {
-                    buffer[size] = '\0';  // Null-terminate the string to make it safe
-                    printf("Received string from client: %s\n", buffer);
+                
+                printf("Received string from client: \n");
+                print_char_array(chunk_number_binary, BINARY_NUMBER_LENGTH);
+                
+                chunk_number_int = binary_to_int(chunk_number_binary);
+                printf("Received chunk number is %d\n", chunk_number_int);
+
+                if(chunk_number_int >= NUMBER_OF_CHUNKS || !responses[chunk_number_int]){
+                    printf("Incorrect chunk number\n");
+
+                    printf("Not ok response will be sent\n");
+                    if (bulk_write(client_socket, not_ok_response, strlen(not_ok_response)) < 0 && errno != EPIPE){   
+                        printf("Errors while sending not ok response");
+                        ERR("write:");
+                    }
+                } else {
+                    printf("Chunk number is correct\n");
+                    printf("Ok response will be sent with length: \n");
+                    print_char_array(ok_response_length_binary, BINARY_NUMBER_LENGTH);
+                    printf("Sending length of ok response...\n");
+                    if (bulk_write(client_socket, ok_response_length_binary, BINARY_NUMBER_LENGTH) < 0 && errno != EPIPE){
+                        printf("Errors while sending ok response length");
+                        ERR("write:");
+                    }
+                    printf("Ok response will be send sent\n");
+                    if (bulk_write(client_socket, ok_response, ok_response_length_int) < 0 && errno != EPIPE){
+                        printf("Errors while sending ok response");
+                        ERR("write:");
+                    }
+                    printf("ok response was sent");
+
+                    printf("Data will be send sent\n");
+                    if (bulk_write(client_socket, responses[chunk_number_int], CHUNK_SIZE) < 0 && errno != EPIPE){
+                        printf("Errors while sending data");
+                        ERR("write:");
+                    }
+                    printf("Data was sent");
+                    // if (bulk_write(client_socket, responses[int_chunk_number], strlen(responses[int_chunk_number])) < 0 && errno != EPIPE){
+                    //     printf("Errors while sending chunk response");
+                    //     ERR("write:");
+                    // }
+                    // printf("Data was sent\n");
                 }
+
+
                 if (TEMP_FAILURE_RETRY(close(client_socket)) < 0)
                     ERR("close");
             }
@@ -190,6 +302,7 @@ void doServer(int tcp_listen_socket)
     if (TEMP_FAILURE_RETRY(close(epoll_descriptor)) < 0)
         ERR("close");
     sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    free_responses(responses);
 }
 
 int main() {
@@ -207,64 +320,4 @@ int main() {
         ERR("close");
     fprintf(stderr, "Server has terminated.\n");
     return EXIT_SUCCESS;
-
-
-    // int server_socket, client_socket;
-    // struct sockaddr_in server_addr, client_addr;
-    // socklen_t addr_len = sizeof(client_addr);
-
-    // // Create a TCP socket
-    // if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-    //     perror("Socket failed");
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // // Define the server address
-    // server_addr.sin_family = AF_INET;
-    // server_addr.sin_addr.s_addr = inet_addr("192.168.0.38");
-    // server_addr.sin_port = htons(PORT);
-
-    // // Bind the socket to the port
-    // if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    //     perror("Bind failed");
-    //     close(server_socket);
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // // Listen for incoming connections
-    // if (listen(server_socket, 3) < 0) {
-    //     perror("Listen failed");
-    //     close(server_socket);
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // printf("Server is listening on port %d...\n", PORT);
-
-    // // Accept an incoming connection
-    // if ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_len)) < 0) {
-    //     perror("Accept failed");
-    //     close(server_socket);
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // // Print a message when a new client connects
-    // printf("New client connected!\n");
-
-    // char buffer[BUFFER_SIZE] = {0};  // Buffer to hold the received message
-    // int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    // if (bytes_received < 0) {
-    //     perror("Receive failed");
-    // } else {
-    //     buffer[bytes_received] = '\0';  // Null-terminate the received string
-    //     printf("Message received from client: %s\n", buffer);
-    // }
-
-
-    // // Close the client connection
-    // close(client_socket);
-
-    // // Close the server socket
-    // close(server_socket);
-
-    // return 0;
 }
