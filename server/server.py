@@ -3,8 +3,7 @@ import file_with_name_msg_pb2
 
 def main():
     # Parametry
-    FILENAME = "test_file.txt"
-    SERVER_IP = '192.168.0.38'
+    SERVER_IP = '127.0.0.1'
     SERVER_PORT = 8000
 
     # Tworzenie socketu TCP
