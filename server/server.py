@@ -4,7 +4,7 @@ import file_with_name_msg_pb2
 def main():
     # Parametry
     SERVER_IP = '127.0.0.1'
-    SERVER_PORT = 12345
+    SERVER_PORT = 8000
 
     # Tworzenie socketu TCP
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
