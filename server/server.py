@@ -24,7 +24,7 @@ def main():
 
                 # Stworzenie i serializacja wiadomości protobuf
                 file_response = file_with_name_msg_pb2.FileResponse()
-                file_response.filename = "test_file.txt"
+                file_response.filename = FILENAME
                 with open("gfs.png", "rb") as photo_file:
                     file_response.filedata = photo_file.read()
 

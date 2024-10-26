@@ -3,6 +3,7 @@
 
 import sys
 _b=sys.version_info[0]<3 and (lambda x:x) or (lambda x:x.encode('latin1'))
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
@@ -20,6 +21,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   serialized_pb=_b('\n\x18\x66ile_with_name_msg.proto\"2\n\x0c\x46ileResponse\x12\x10\n\x08\x66ilename\x18\x01 \x01(\t\x12\x10\n\x08\x66iledata\x18\x02 \x01(\x0c\x62\x06proto3')
+
 )
 
 
@@ -35,6 +37,7 @@ _FILERESPONSE = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='filename', full_name='FileResponse.filename', index=0,
       number=1, type=9, cpp_type=9, label=1,
+
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -46,6 +49,7 @@ _FILERESPONSE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+
   ],
   extensions=[
   ],
