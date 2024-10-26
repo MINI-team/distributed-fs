@@ -272,7 +272,7 @@ void doServer(int tcp_listen_socket)
                         printf("Errors while sending ok response");
                         ERR("write:");
                     }
-                    printf("ok response was sent");
+                    printf("ok response was sent\n");
 
                     printf("Data will be send sent\n");
                     if (bulk_write(client_socket, responses[chunk_number_int], CHUNK_SIZE) < 0 && errno != EPIPE){
@@ -280,11 +280,6 @@ void doServer(int tcp_listen_socket)
                         ERR("write:");
                     }
                     printf("Data was sent");
-                    // if (bulk_write(client_socket, responses[int_chunk_number], strlen(responses[int_chunk_number])) < 0 && errno != EPIPE){
-                    //     printf("Errors while sending chunk response");
-                    //     ERR("write:");
-                    // }
-                    // printf("Data was sent\n");
                 }
 
 
