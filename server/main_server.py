@@ -5,8 +5,8 @@ import file_request_pb2
 import replicas_response_pb2
 
 # Parametry sieciowe
-SERVER_IP = '127.0.0.1'
-SERVER_PORT = 8000
+SERVER_IP = "1.2.3.4"
+SERVER_PORT = 8001
 
 # Parametry haszowania
 BASE = 113
@@ -49,15 +49,15 @@ class Replica:
 
 def seed_servers():
     servers.append(
-        Server("Server A", "127.0.0.1", 8000)
+        Server("Server A", "1.2.3.4", 8000)
     )
 
     servers.append(
-        Server("Server B", "127.0.0.2", 8000)
+        Server("Server B", "1.2.3.4", 8000)
     )
     
     servers.append(
-        Server("Server C", "127.0.0.3", 8000)
+        Server("Server C", "1.2.3.4", 8000)
     )
 
 def seed_files(paths):
@@ -160,7 +160,8 @@ def main():
     # print(get_hash("/home/piotr/Desktop/photo2.png"))
     seed_servers()
 
-    file_1 = "/home/piotr/Desktop/photo1.png"
+    # file_1 = "/home/piotr/Desktop/photo1.png"
+    file_1 = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png"
     seed_files([file_1])
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
