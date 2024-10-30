@@ -30,13 +30,90 @@
 #define ERR(source) (perror(source), fprintf(stdout, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 #define BACKLOG 3
 #define MAX_EVENTS 16
-#define PORT 8000
-#define ADDRESS "1.2.3.4"
+#define PORT 8080
+#define ADDRESS "192.168.0.38"
 #define BINARY_NUMBER_LENGTH 32
 #define CHUNK_SIZE 10
 #define NUMBER_OF_CHUNKS 48
+#define NUMBER_OF_MB 32
+#define BYTES_IN_MB 1048576
+#define FILENAME_MAX_LEN 20
 
 volatile sig_atomic_t do_work = 1;
+
+ssize_t bulk_read(int fd, char *buf, size_t count)
+{
+    int c;
+    size_t len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(read(fd, buf, count));
+        if (c < 0)
+            return c;
+        if (0 == c)
+            return len;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+ssize_t bulk_write(int fd, char *buf, size_t count)
+{
+    int c;
+    size_t len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        if (c < 0)
+            return c;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+int file_exists(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file) {
+        fclose(file);
+        return 1;  // File exists
+    }
+    return 0;      // File does not exist
+}
+
+size_t getFileSize(const char *filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("Could not open file");
+        return 0;
+    }
+
+    fseek(file, 0, SEEK_END);
+    size_t size = ftell(file);
+    fclose(file);
+
+    return size;
+}
+
+char* read_chunk_file(const char* filename, size_t size) {
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) ERR("open file");
+
+    char* buffer = (char*)malloc(size);
+    if (!buffer) ERR("malloc");
+
+    ssize_t bytes_read = bulk_read(fd, buffer, size);
+    if (bytes_read < 0) {
+        free(buffer);
+        ERR("read file");
+    }
+
+    close(fd);
+    return buffer;
+}
 
 void sigint_handler(int sig) { do_work = 0; }
 
@@ -108,69 +185,6 @@ int add_new_client(int sfd)
     return nfd;
 }
 
-ssize_t bulk_read(int fd, char *buf, size_t count)
-{
-    int c;
-    size_t len = 0;
-    do
-    {
-        c = TEMP_FAILURE_RETRY(read(fd, buf, count));
-        if (c < 0)
-            return c;
-        if (0 == c)
-            return len;
-        buf += c;
-        len += c;
-        count -= c;
-    } while (count > 0);
-    return len;
-}
-
-ssize_t bulk_write(int fd, char *buf, size_t count)
-{
-    int c;
-    size_t len = 0;
-    do
-    {
-        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
-        if (c < 0)
-            return c;
-        buf += c;
-        len += c;
-        count -= c;
-    } while (count > 0);
-    return len;
-}
-
-void initialize_responses(char* responses[]) {
-    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
-            responses[i] = (char*)malloc(CHUNK_SIZE);
-            if (responses[i] == NULL) {
-                perror("Memory allocation failed");
-                exit(EXIT_FAILURE);
-            }
-            snprintf(responses[i], CHUNK_SIZE, "Some data");
-    }
-}
-
-void print_responses(char* responses[]) {
-    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
-        if (responses[i] != NULL) {
-            printf("Response %d: %s\n", i, responses[i]);
-        } else {
-            printf("Response %d is NULL\n", i);
-        }
-    }
-}
-
-void free_responses(char* responses[]) {
-    for (int i = 0; i < NUMBER_OF_CHUNKS; i++) {
-        if (responses[i] != NULL) {
-            free(responses[i]);
-        }
-    }
-}
-
 int binary_to_int(const char *binary_number) {
     int result = 0;
     for (int i = 0; i < BINARY_NUMBER_LENGTH; i++) {
@@ -215,8 +229,6 @@ void doServer(int tcp_listen_socket)
     int message_length;
     char chunk_number_binary[BINARY_NUMBER_LENGTH];
     int chunk_number_int;
-    char* responses[NUMBER_OF_CHUNKS];
-    initialize_responses(responses);
     char *ok_response = "ok";
     char *not_ok_response = "not ok";
     int ok_response_length_int = strlen(ok_response);
@@ -232,6 +244,8 @@ void doServer(int tcp_listen_socket)
     sigemptyset(&mask);
     sigaddset(&mask, SIGINT);
     sigprocmask(SIG_BLOCK, &mask, &oldmask);
+    char filename[FILENAME_MAX_LEN];
+
     while (do_work)
     {
         if ((nfds = epoll_pwait(epoll_descriptor, events, MAX_EVENTS, -1, &oldmask)) > 0)
@@ -249,15 +263,23 @@ void doServer(int tcp_listen_socket)
                 
                 chunk_number_int = binary_to_int(chunk_number_binary);
                 printf("Received chunk number is %d\n", chunk_number_int);
+                snprintf(filename, FILENAME_MAX_LEN, "%d.chunk", chunk_number_int);
 
-                if(chunk_number_int >= NUMBER_OF_CHUNKS || !responses[chunk_number_int]){
+                if(chunk_number_int >= NUMBER_OF_CHUNKS || 0 == file_exists(filename)){
                     printf("Incorrect chunk number\n");
-
-                    printf("Not ok response will be sent\n");
-                    if (bulk_write(client_socket, not_ok_response, strlen(not_ok_response)) < 0 && errno != EPIPE){   
+                    printf("No ok response will be sent with length: \n");
+                    print_char_array(not_ok_response_length_binary, BINARY_NUMBER_LENGTH);
+                    printf("Sending length of no ok response...\n");
+                    if (bulk_write(client_socket, not_ok_response_length_binary, BINARY_NUMBER_LENGTH) < 0 && errno != EPIPE){
+                        printf("Errors while sending no ok response length");
+                        ERR("write:");
+                    }
+                    printf("No ok response will be sent\n");
+                    if (bulk_write(client_socket, not_ok_response, not_ok_response_length_int) < 0 && errno != EPIPE){   
                         printf("Errors while sending not ok response");
                         ERR("write:");
                     }
+                    printf("No ok response was sent\n");
                 } else {
                     printf("Chunk number is correct\n");
                     printf("Ok response will be sent with length: \n");
@@ -273,9 +295,23 @@ void doServer(int tcp_listen_socket)
                         ERR("write:");
                     }
                     printf("ok response was sent\n");
+                    // TO DO: send length of data
+                    size_t fileSize = getFileSize(filename);
+                    int_to_binary_string(fileSize, message_length_binary);
+                    printf("Data length (%zu) will be send sent\n", fileSize);
+                    if (bulk_write(client_socket, message_length_binary, BINARY_NUMBER_LENGTH) < 0 && errno != EPIPE){
+                        printf("Errors while sending data");
+                        ERR("write:");
+                    }
+                    // send data:
+                    char* chunk_data = read_chunk_file(filename, fileSize);
+                    if (chunk_data == NULL) {
+                        fprintf(stderr, "Failed to read chunk file: %s\n", filename);
+                        return EXIT_FAILURE;
+                    }
 
                     printf("Data will be send sent\n");
-                    if (bulk_write(client_socket, responses[chunk_number_int], CHUNK_SIZE) < 0 && errno != EPIPE){
+                    if (bulk_write(client_socket, chunk_data, fileSize) < 0 && errno != EPIPE){
                         printf("Errors while sending data");
                         ERR("write:");
                     }
@@ -297,7 +333,6 @@ void doServer(int tcp_listen_socket)
     if (TEMP_FAILURE_RETRY(close(epoll_descriptor)) < 0)
         ERR("close");
     sigprocmask(SIG_UNBLOCK, &mask, NULL);
-    free_responses(responses);
 }
 
 int main() {
