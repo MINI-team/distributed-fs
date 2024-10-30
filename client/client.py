@@ -6,12 +6,9 @@ import replicas_response_pb2
 from dataclasses import dataclass
 from typing import List
 
-SERVER_IP = "192.168.0.38"
+SERVER_IP = "1.2.3.4"
 SERVER_PORT = 8001
 BINARY_NUMBER_LENGTH = 32
-CHUNK_NUMBER = 2
-CHUNK_LENGTH = 10
-FILENAME = "40mb.jpg"
 
 class Replica:
     def __init__(self, ip: str, port: int, chunk_id: int, is_primary: bool):
@@ -120,53 +117,50 @@ def send_file_request(path, offset, size):
 
             print("Received message:", replicas_response)
             print("Success?", replicas_response.success)
-            REPLICA_IP = replicas_response.replicas[0].ip
-            REPLICA_PORT = replicas_response.replicas[0].port
 
             # hardcoded, later will be received from master
             replicas: List[Replica] = [
-                Replica(ip="192.168.0.38", port=8080, chunk_id=0, is_primary=True),
-                Replica(ip="192.168.0.38", port=8081, chunk_id=1, is_primary=False),
+                Replica(ip="1.2.3.4", port=8080, chunk_id=0, is_primary=True),
+                Replica(ip="1.2.3.4", port=8081, chunk_id=1, is_primary=False),
             ]
             #
             for replica in replicas:
-                REPLICA_IP = replica.ip
-                REPLICA_PORT = replica.port
-                CHUNK_NUMBER = replica.chunk_id
+                replica_ip = replica.ip
+                replica_port = replica.port
+                chunk_number = replica.chunk_id
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as replica_socket:
                     try:
-                        replica_socket.connect((REPLICA_IP, REPLICA_PORT))
-                        print(f"Connected to replica {REPLICA_IP}:{REPLICA_PORT}")
+                        replica_socket.connect((replica_ip, replica_port))
+                        print(f"Connected to replica {replica_ip}:{replica_port}")
                         replica_socket.setblocking(1)
 
-                        number_to_send = int_to_c_binary(CHUNK_NUMBER)
-                        replica_socket.sendall((str(number_to_send)).encode())
-                        print("Message sent to relica (chunk number in binary format):", number_to_send)
-                        print("of length:", len(str(number_to_send)))
+                        chunk_number_binary = int_to_c_binary(chunk_number)
+                        replica_socket.sendall((str(chunk_number_binary)).encode())
+                        print("Message sent to relica (chunk number in binary format):", chunk_number_binary)
 
-                        response_length_message = receive_message(replica_socket, BINARY_NUMBER_LENGTH)
-                        if response_length_message is None:
+                        status_length_binary = receive_message(replica_socket, BINARY_NUMBER_LENGTH)
+                        if status_length_binary is None:
                             print("None was received")
-                        if response_length_message is not None:
-                            print(response_length_message.decode() + " was received")
+                        if status_length_binary is not None:
+                            print("Received status length in binary format: " + status_length_binary.decode())
+                        status_length = binary_to_int(status_length_binary)
 
-                        response_length = binary_to_int(response_length_message)
-                        response_message = receive_message(replica_socket, response_length)
-                        if response_message is None:
+                        status_message = receive_message(replica_socket, status_length)
+                        if status_message is None:
                             print("None was received")
                             return
-                        if response_message is not None:
-                            print("Received status:",response_message.decode())
+                        if status_message is not None:
+                            print("Received status:",status_message.decode())
 
-                        if response_message == "not ok":
+                        if status_message == "not ok":
+                            # change later
                             return
 
-                        # to do: receive chunk length, it could be less than CHUNK_LENGTH
-                        data_length = receive_message(replica_socket, BINARY_NUMBER_LENGTH)
-                        response_length = binary_to_int(data_length)
-                        print("Received data length: " + str(response_length))
+                        data_length_binary = receive_message(replica_socket, BINARY_NUMBER_LENGTH)
+                        data_length = binary_to_int(data_length_binary)
+                        print("Received data length: " + str(data_length))
 
-                        chunk_data = receive_message(replica_socket, response_length)
+                        chunk_data = receive_message(replica_socket, data_length)
                         if chunk_data is None:
                             print("None was received")
                         if chunk_data is not None:
