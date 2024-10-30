@@ -19,8 +19,6 @@ class Replica:
 
 def receive_message(sock, length):
     """Helper function to receive exactly 'length' bytes from the socket."""
-    if isinstance(length, bytes):
-        length = int.from_bytes(length, "big")
     data = b""
     while len(data) < length:
         packet = sock.recv(length - len(data))

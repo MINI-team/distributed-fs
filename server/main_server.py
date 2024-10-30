@@ -49,7 +49,7 @@ class Replica:
 
 def seed_servers():
     servers.append(
-        Server("Server A", "192.168.0.38", 8000)
+        Server("Server A", "1.2.3.4", 8000)
     )
 
     servers.append(
