@@ -177,6 +177,7 @@ def main():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
         conn = socket.socket()
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             server_sock.bind((SERVER_IP, SERVER_PORT))
             server_sock.listen(1)
