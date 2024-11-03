@@ -1,8 +1,13 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import socket
 import sys
-import file_with_name_msg_pb2
-import file_request_pb2
-import replicas_response_pb2
+# import file_request_pb2
+# import replicas_response_pb2
+import dfs_pb2
 
 # Parametry sieciowe
 SERVER_IP = "127.0.0.1"
@@ -119,7 +124,7 @@ def receive_request(sock):
         print("Error: No data received.")
         return
 
-    file_request = file_request_pb2.FileRequest()
+    file_request = dfs_pb2.FileRequest()
     file_request.ParseFromString(protobuf_data)
 
     print(file_request)
@@ -130,7 +135,7 @@ def get_replicas(file_hash, path, offset, size):
     chunk_no = int(offset / CHUNK_SIZE)
 
     if(path not in file_map):
-        replicas_response = replicas_response_pb2.ReplicaList(success=False, replicas=[])
+        replicas_response = dfs_pb2.ChunkList(success=False, chunks=[])
         protobuf_data = replicas_response.SerializeToString()
         return protobuf_data
 
@@ -140,7 +145,7 @@ def get_replicas(file_hash, path, offset, size):
 
     for replica in replica_list:
         print(replica.is_primary)
-        replica_proto = replicas_response_pb2.Replica()
+        replica_proto = dfs_pb2.Replica()
         replica_proto.name = path
         replica_proto.ip = replica.server.ip
         replica_proto.port = replica.server.port
@@ -148,7 +153,7 @@ def get_replicas(file_hash, path, offset, size):
         replica_proto.is_primary = replica.is_primary
         replicas_proto.append(replica_proto)
 
-    replicas_response = replicas_response_pb2.ReplicaList(success = True, replicas=replicas_proto)
+    replicas_response = dfs_pb2.ReplicaList(success = True, replicas=replicas_proto)
 
     protobuf_data = replicas_response.SerializeToString()
     

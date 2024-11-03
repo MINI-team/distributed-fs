@@ -1,0 +1,32 @@
+// protoc --python_out=. replicas_response.proto; cp replicas_response_pb2.py client; cp replicas_response_pb2.py server
+// protoc --python_out=. dfs.proto
+syntax = "proto3";
+
+message FileRequest {
+    string path = 1;
+    int64 offset = 2;
+    int64 size = 3;
+}
+
+message Replica {
+    string name = 1;
+    string ip = 2;
+    int32 port = 3;
+    int32 chunk_id = 4;
+    bool is_primary = 5;
+}
+  
+message Chunk {
+    int32 chunk_id = 1;
+    repeated Replica replicas = 2;
+}
+  
+message ChunkList {
+    bool success = 1;
+    repeated Chunk chunks = 2;
+}
+
+message FileResponse {
+    string filename = 1;
+    bytes filedata = 2;
+}

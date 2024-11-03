@@ -1,8 +1,14 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import socket
-import file_with_name_msg_pb2  # Generated from the .proto file
+# import file_with_name_msg_pb2  # Generated from the .proto file
 # from . import file_request_pb2
-import file_request_pb2
-import replicas_response_pb2
+# import file_request_pb2
+# import replicas_response_pb2
+import dfs_pb2
 from dataclasses import dataclass
 from typing import List
 
@@ -92,7 +98,7 @@ def binary_to_int(binary_str):
 
 def send_file_request(path, offset, size):
     all_chunks_data = []
-    message = file_request_pb2.FileRequest()
+    message = dfs_pb2.FileRequest()
     message.path = path
     message.offset = offset
     message.size = size
@@ -110,7 +116,7 @@ def send_file_request(path, offset, size):
 
             protobuf_data = receive_len_and_message(client_socket)
 
-            replicas_response = replicas_response_pb2.ReplicaList()
+            replicas_response = dfs_pb2.ChunkList()
             replicas_response.ParseFromString(protobuf_data)
             print("ip:", replicas_response.replicas[0].ip, "port:", replicas_response.replicas[0].port)
 
@@ -118,11 +124,14 @@ def send_file_request(path, offset, size):
             print("Received message:", replicas_response)
             print("Success?", replicas_response.success)
 
+            return
+
             # hardcoded, later will be received from master
             replicas: List[Replica] = [
                 Replica(ip="127.0.0.1", port=8080, chunk_id=0, is_primary=True),
                 # Replica(ip="127.0.0.1", port=8081, chunk_id=1, is_primary=False),
             ]
+
             #
             for replica in replicas:
                 replica_ip = replica.ip
