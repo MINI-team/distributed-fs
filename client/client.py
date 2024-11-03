@@ -187,6 +187,7 @@ def send_file_request(path, offset, size):
         except Exception as e:
             print(f"Error: {e}")
         
+        print("after catching exception (or successful try)")
         client_socket.close()
 
 def main():

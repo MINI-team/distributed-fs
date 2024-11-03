@@ -31,9 +31,6 @@ def get_hash(path):
 
     return hash
 
-servers = []
-file_map = dict(hashfunc=get_hash)
-
 class Server:
     def __init__(self, name: str, ip: str, port: int):
         self.name = name # probably it's just the name of the file
@@ -42,15 +39,19 @@ class Server:
         # chunkserver programs on different ports to boost performance
 
 class Replica:
-    # def __init__(self, name: str, ip: str, port: int, chunk_id: int, is_primary: bool):
-    # def __init__(self, name: str, server: Server, chunk_id: int, is_primary: bool):
-    def __init__(self, server: Server, chunk_id: int, is_primary: bool):
-        # self.name = name
-        # self.ip = ip
-        # self.port = port
+    # def __init__(self, server: Server, chunk_id: int, is_primary: bool):
+    def __init__(self, server: Server, is_primary: bool):
         self.server = server
-        self.chunk_id = chunk_id
+        # self.chunk_id = chunk_id # moved to Chunk
         self.is_primary = is_primary
+
+class Chunk:
+    def __init__(self, chunk_id: int, replicas: list):
+        self.chunk_id = chunk_id
+        self.replicas = replicas
+
+servers = []
+file_map = dict(hashfunc=get_hash)
 
 def seed_servers():
     servers.append(
@@ -70,36 +71,35 @@ def seed_files(paths):
     # [Replica(ip, port, ...), Replica(ip, port...), Replica(ip, port...)]
     chunk_id_1 = 1
     chunk_id_2 = 2
+    # the chunk id  should be a global, incremented value
 
     replica_list_1 = list()
     replica_list_1.append(
-        Replica(servers[0], chunk_id_1, True), # the chunk id probably should be sth else,
-        # either a global, incremented value (YES)
+        Replica(servers[0], True)
     )
 
     replica_list_1.append(
-        Replica(servers[1], chunk_id_1, False),
+        Replica(servers[1], False),
     )
 
     replica_list_1.append(
-        Replica(servers[2], chunk_id_1, False),
+        Replica(servers[2], False),
     )
 
     replica_list_2 = list()
     replica_list_2.append(
-        Replica(servers[0], chunk_id_2, True), # the chunk id probably should be sth else,
-        # either a global, incremented value or a hash of the path combined with the chunk number in a file
+        Replica(servers[0], True)
     )
 
     replica_list_2.append(
-        Replica(servers[1], chunk_id_2, False),
+        Replica(servers[1], False),
     )
 
     replica_list_2.append(
-        Replica(servers[2], chunk_id_2, False),
+        Replica(servers[2], False),
     )
 
-    file_map[paths[0]] = [replica_list_1, replica_list_2]
+    file_map[paths[0]] = [Chunk(chunk_id_1, replica_list_1), Chunk(chunk_id_2, replica_list_2)]
 
 def receive_message(sock, length):
     """Helper function to receive exactly 'length' bytes from the socket."""
@@ -143,21 +143,21 @@ def get_replicas(file_hash, path, offset, size):
     
     chunks = []
 
-    for replica_list in file_map[path]:
-    #replica_list = file_map[path][chunk_no]
+    for chunk in file_map[path]:
         replicas = []
+        replica_list = chunk.replicas
 
         for replica in replica_list:
             print("Is replica primary?", replica.is_primary)
             replica_proto = dfs_pb2.Replica()
-            replica_proto.name = path
+            replica_proto.name = replica.server.name
             replica_proto.ip = replica.server.ip
             replica_proto.port = replica.server.port
-            replica_proto.chunk_id = get_hash(path) + chunk_no
+            # replica_proto.chunk_id = get_hash(path) + chunk_no
             replica_proto.is_primary = replica.is_primary
             replicas.append(replica_proto)
         
-        chunk = dfs_pb2.Chunk(chunk_id = 1, replicas = replicas)
+        chunk = dfs_pb2.Chunk(chunk_id = chunk.chunk_id, replicas = replicas)
         chunks.append(chunk)
 
     chunk_list = dfs_pb2.ChunkList(success = 1, chunks = chunks)
@@ -210,6 +210,5 @@ def main():
         
         server_sock.close()
         conn.close()
-
 
 main()
