@@ -54,18 +54,20 @@ class Replica:
 
 def seed_servers():
     servers.append(
-        Server("Server A", "1.2.3.4", 8000)
+        Server("Server A", "127.0.0.1", 8000)
     )
 
     servers.append(
-        Server("Server B", "1.2.3.4", 8000)
+        Server("Server B", "127.0.0.1", 8000)
     )
     
     servers.append(
-        Server("Server C", "1.2.3.4", 8000)
+        Server("Server C", "127.0.0.1", 8000)
     )
 
 def seed_files(paths):
+    # fills the file_map dictionary with one entry, the entries are of the format 
+    # [Replica(ip, port, ...), Replica(ip, port...), Replica(ip, port...)]
     chunk_id_1 = 1
     chunk_id_2 = 2
 
@@ -138,24 +140,28 @@ def get_replicas(file_hash, path, offset, size):
         replicas_response = dfs_pb2.ChunkList(success=False, chunks=[])
         protobuf_data = replicas_response.SerializeToString()
         return protobuf_data
+    
+    chunks = []
 
-    replica_list = file_map[path][chunk_no]
+    for replica_list in file_map[path]:
+    #replica_list = file_map[path][chunk_no]
+        replicas = []
 
-    replicas_proto = []
+        for replica in replica_list:
+            print("Is replica primary?", replica.is_primary)
+            replica_proto = dfs_pb2.Replica()
+            replica_proto.name = path
+            replica_proto.ip = replica.server.ip
+            replica_proto.port = replica.server.port
+            replica_proto.chunk_id = get_hash(path) + chunk_no
+            replica_proto.is_primary = replica.is_primary
+            replicas.append(replica_proto)
+        
+        chunk = dfs_pb2.Chunk(chunk_id = 1, replicas = replicas)
+        chunks.append(chunk)
 
-    for replica in replica_list:
-        print(replica.is_primary)
-        replica_proto = dfs_pb2.Replica()
-        replica_proto.name = path
-        replica_proto.ip = replica.server.ip
-        replica_proto.port = replica.server.port
-        replica_proto.chunk_id = get_hash(path) + chunk_no
-        replica_proto.is_primary = replica.is_primary
-        replicas_proto.append(replica_proto)
-
-    replicas_response = dfs_pb2.ReplicaList(success = True, replicas=replicas_proto)
-
-    protobuf_data = replicas_response.SerializeToString()
+    chunk_list = dfs_pb2.ChunkList(success = 1, chunks = chunks)
+    protobuf_data = chunk_list.SerializeToString()
     
     return protobuf_data
 
@@ -196,10 +202,13 @@ def main():
                     print(f"Sent message to client.\nPress q to exit")
                     char = sys.stdin.read(1)
                     if(char == 'q'):
-                        return
+                        break
         except Exception as e:
             print(f"Errorxd: {e}")
         
+        print("after catching exception (or successful try)")
+        
+        server_sock.close()
         conn.close()
 
 

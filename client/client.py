@@ -118,7 +118,7 @@ def send_file_request(path, offset, size):
 
             replicas_response = dfs_pb2.ChunkList()
             replicas_response.ParseFromString(protobuf_data)
-            print("ip:", replicas_response.replicas[0].ip, "port:", replicas_response.replicas[0].port)
+            # print("ip:", replicas_response.replicas[0].ip, "port:", replicas_response.replicas[0].port)
 
 
             print("Received message:", replicas_response)
@@ -186,6 +186,8 @@ def send_file_request(path, offset, size):
 
         except Exception as e:
             print(f"Error: {e}")
+        
+        client_socket.close()
 
 def main():
     # send_file_request("/home/piotr/Pictures/gfs.png", 8000000, 2000000)
