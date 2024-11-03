@@ -10,7 +10,12 @@ message Replica {
   bool is_primary = 5;
 }
 
-message ReplicaList {
-  bool success = 1;
+message Chunk {
+  int32 chunk_id = 1;
   repeated Replica replicas = 2;
+}
+
+message ChunkList {
+  bool success = 1;
+  repeated Chunk chunks = 2;
 }
