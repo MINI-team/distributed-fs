@@ -6,7 +6,7 @@ import replicas_response_pb2
 from dataclasses import dataclass
 from typing import List
 
-SERVER_IP = "1.2.3.4"
+SERVER_IP = "127.0.0.1"
 SERVER_PORT = 8001
 BINARY_NUMBER_LENGTH = 32
 
@@ -112,14 +112,16 @@ def send_file_request(path, offset, size):
 
             replicas_response = replicas_response_pb2.ReplicaList()
             replicas_response.ParseFromString(protobuf_data)
+            print("ip:", replicas_response.replicas[0].ip, "port:", replicas_response.replicas[0].port)
+
 
             print("Received message:", replicas_response)
             print("Success?", replicas_response.success)
 
             # hardcoded, later will be received from master
             replicas: List[Replica] = [
-                Replica(ip="1.2.3.4", port=8080, chunk_id=0, is_primary=True),
-                Replica(ip="1.2.3.4", port=8081, chunk_id=1, is_primary=False),
+                Replica(ip="127.0.0.1", port=8080, chunk_id=0, is_primary=True),
+                # Replica(ip="127.0.0.1", port=8081, chunk_id=1, is_primary=False),
             ]
             #
             for replica in replicas:
@@ -164,6 +166,8 @@ def send_file_request(path, offset, size):
                         if chunk_data is not None:
                             print("Data was received")
                             all_chunks_data.append(chunk_data)
+                        
+
                     except socket.error as e:
                         print(f"Socket error: {e}")
                     except ConnectionError as ce:

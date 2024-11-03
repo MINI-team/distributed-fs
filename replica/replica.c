@@ -31,7 +31,7 @@
 #define BACKLOG 3
 #define MAX_EVENTS 16
 #define PORT 8080
-#define ADDRESS "1.2.3.4"
+#define ADDRESS "127.0.0.1"
 #define BINARY_NUMBER_LENGTH 32
 #define FILENAME_MAX_LEN 20
 

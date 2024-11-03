@@ -5,7 +5,7 @@ import file_request_pb2
 import replicas_response_pb2
 
 # Parametry sieciowe
-SERVER_IP = "1.2.3.4"
+SERVER_IP = "127.0.0.1"
 SERVER_PORT = 8001
 
 # Parametry haszowania
@@ -193,7 +193,7 @@ def main():
                     if(char == 'q'):
                         return
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Errorxd: {e}")
         
         conn.close()
 
