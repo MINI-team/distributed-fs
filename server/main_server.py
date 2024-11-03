@@ -66,13 +66,13 @@ def seed_servers():
     )
 
 def seed_files(paths):
-    chunk_id_1 = get_hash(paths[0]) + 1
-    chunk_id_2 = get_hash(paths[0]) + 2
+    chunk_id_1 = 1
+    chunk_id_2 = 2
 
     replica_list_1 = list()
     replica_list_1.append(
         Replica(servers[0], chunk_id_1, True), # the chunk id probably should be sth else,
-        # either a global, incremented value or a hash of the path combined with the chunk number in a file
+        # either a global, incremented value (YES)
     )
 
     replica_list_1.append(
