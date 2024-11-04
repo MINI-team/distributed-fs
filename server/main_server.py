@@ -55,15 +55,15 @@ file_map = dict(hashfunc=get_hash)
 
 def seed_servers():
     servers.append(
-        Server("Server A", "127.0.0.1", 8000)
+        Server("Server A", "127.0.0.1", 8080)
     )
 
     servers.append(
-        Server("Server B", "127.0.0.1", 8000)
+        Server("Server B", "127.0.0.1", 8081)
     )
     
     servers.append(
-        Server("Server C", "127.0.0.1", 8000)
+        Server("Server C", "127.0.0.1", 8082)
     )
 
 def seed_files(paths):
@@ -194,7 +194,7 @@ def main():
 
                     msg_length = len(protobuf_data)
 
-                    conn.sendall(msg_length.to_bytes(4, byteorder='big'))
+                    # conn.sendall(msg_length.to_bytes(4, byteorder='big'))
 
                     # Wysłanie samej wiadomości i zakończenie połączenia
                     conn.sendall(protobuf_data)

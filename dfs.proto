@@ -26,6 +26,13 @@ message ChunkList {
     repeated Chunk chunks = 2;
 }
 
+
+message ChunkRequest {
+    string path = 1;
+    int32 chunk_id = 2;
+}
+
+
 message FileResponse {
     string filename = 1;
     bytes filedata = 2;
