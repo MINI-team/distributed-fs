@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "dfs.pb-c.h"
 #include "common.h"
+#include "pthread.h"
 
 const char* SERVER_ADDRESS = "127.0.0.1";
 const uint16_t SERVER_PORT = 8001;
@@ -8,6 +9,70 @@ const uint16_t SERVER_PORT = 8001;
 char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
 
 char* OUTPUT_PATH = "output.txt";
+
+#define OFFSET 13
+
+typedef struct argsThread
+{
+    pthread_t tid;
+    char* path;
+    int chunk_id;
+    
+    char *ip;
+    uint16_t port;
+
+    int offset;
+    int outputfd;
+    
+} argsThread_t;
+
+void *getChunk(void *voidPtr)
+{
+    int                 serverfd, n;
+    struct sockaddr_in  servaddr;
+    char                recvline[MAXLINE];
+
+    argsThread_t *args = voidPtr;
+    printf("[tid: %lu] chunk_id: %d\n", pthread_self(), args->chunk_id);
+
+    ChunkRequest chunkRequest = CHUNK_REQUEST__INIT;
+    chunkRequest.path = args->path;
+    chunkRequest.chunk_id = args->chunk_id;
+
+    int len = chunk_request__get_packed_size(&chunkRequest);
+    uint8_t *buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
+    chunk_request__pack(&chunkRequest, buffer);
+
+    if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(args->port);
+
+    if (inet_pton(AF_INET, args->ip, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error for %s", args->ip);
+
+    if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
+        err_n_die("connect error");
+
+    int network_length = htonl(len);
+    write(serverfd, &network_length, sizeof(network_length));
+
+    write(serverfd, buffer, len);
+    free(buffer);
+
+    memset(recvline, 0, MAXLINE);
+    n = read(serverfd, recvline, MAXLINE);
+        
+    if ((pwrite(args->outputfd, recvline, n, args->offset)) < 0) {
+        err_n_die("pwrite error");
+    }
+
+    printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
+
+    close(serverfd);
+}
 
 void setFileRequest(int arc, char **arv, FileRequest *request) 
 {
@@ -19,7 +84,7 @@ void setFileRequest(int arc, char **arv, FileRequest *request)
 
 int main(int argc, char **argv) 
 {
-    int                 serverfd, outputfd, n;
+    int                 serverfd, outputfd, n, err;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
@@ -80,56 +145,27 @@ int main(int argc, char **argv)
 
     close(serverfd);
 
-    int offset = 0;
+    argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * chunkList->n_chunks);
 
-    for(int i = 0; i < chunkList->n_chunks; i++){
-        printf("chunk_id: %d \n", chunkList->chunks[i]->chunk_id);
+    for (int i = 0; i < chunkList->n_chunks; i++) {
 
-        ChunkRequest chunkRequest = CHUNK_REQUEST__INIT;
-        chunkRequest.chunk_id = chunkList->chunks[i]->chunk_id;
-        chunkRequest.path = DEFAULT_PATH;
+        threads[i].chunk_id = chunkList->chunks[i]->chunk_id;
+        threads[i].path = DEFAULT_PATH;
+        threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
+        threads[i].port = chunkList->chunks[i]->replicas[0]->port;
+        threads[i].offset = i * OFFSET;
+        threads[i].outputfd = outputfd;
 
-        int len = chunk_request__get_packed_size(&chunkRequest);
-        uint8_t *buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
-        chunk_request__pack(&chunkRequest, buffer);
-
-        if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-            err_n_die("socket error");
-
-        char* ip = chunkList->chunks[i]->replicas[0]->ip;
-        uint16_t port = chunkList->chunks[i]->replicas[0]->port;
-
-        memset(&servaddr, 0, sizeof(servaddr));
-        servaddr.sin_family = AF_INET;
-        servaddr.sin_port = htons(port);
-
-        printf("ip: %s \n", ip);
-        printf("port: %d \n", port);
-
-        if (inet_pton(AF_INET, ip, &servaddr.sin_addr) <= 0)
-            err_n_die("inet_pton error for %s", argv[1]);
-
-        if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
-            err_n_die("connect error");
-
-
-        int network_length = htonl(len);
-        write(serverfd, &network_length, sizeof(network_length));
-
-        write(serverfd, buffer, len);
-        free(buffer);
-
-        memset(recvline, 0, MAXLINE);
-        n = read(serverfd, recvline, MAXLINE);
-        
-        if ((pwrite(outputfd, recvline, n, offset)) < 0)
-            err_n_die("pwrite error");
-
-        offset += n;
-        printf("received: %s \n", recvline);
-
-        close(serverfd);
-
-        printf("\n");
+        if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0) {
+            err_n_die("couldn't create thread");
+        }
     }
+
+    for (int i = 0; i < chunkList->n_chunks; i++) {
+        if ((err = pthread_join(threads[i].tid, NULL)) != 0) {
+            err_n_die("couldn't join thread");
+        }
+    }
+
+    free(threads);
 }
