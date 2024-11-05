@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     n = read(serverfd, recvline, MAXLINE);
 
     ChunkList *chunkList = chunk_list__unpack(NULL, n, recvline);
-    printf("n_chunks: %d\n", chunkList->n_chunks);
+    printf("n_chunks: %zu\n", chunkList->n_chunks);
     printf("\n");
 
     for(int i = 0; i < chunkList->n_chunks; i++){
