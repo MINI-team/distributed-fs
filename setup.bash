@@ -1,0 +1,2 @@
+protoc-c --c_out=./c-client dfs.proto
+protoc-c --c_out=./mock-replica dfs.proto

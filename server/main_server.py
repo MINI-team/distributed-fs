@@ -1,8 +1,13 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import socket
 import sys
-import file_with_name_msg_pb2
-import file_request_pb2
-import replicas_response_pb2
+# import file_request_pb2
+# import replicas_response_pb2
+import dfs_pb2
 
 # Parametry sieciowe
 SERVER_IP = "127.0.0.1"
@@ -26,9 +31,6 @@ def get_hash(path):
 
     return hash
 
-servers = []
-file_map = dict(hashfunc=get_hash)
-
 class Server:
     def __init__(self, name: str, ip: str, port: int):
         self.name = name # probably it's just the name of the file
@@ -37,62 +39,67 @@ class Server:
         # chunkserver programs on different ports to boost performance
 
 class Replica:
-    # def __init__(self, name: str, ip: str, port: int, chunk_id: int, is_primary: bool):
-    # def __init__(self, name: str, server: Server, chunk_id: int, is_primary: bool):
-    def __init__(self, server: Server, chunk_id: int, is_primary: bool):
-        # self.name = name
-        # self.ip = ip
-        # self.port = port
+    # def __init__(self, server: Server, chunk_id: int, is_primary: bool):
+    def __init__(self, server: Server, is_primary: bool):
         self.server = server
-        self.chunk_id = chunk_id
+        # self.chunk_id = chunk_id # moved to Chunk
         self.is_primary = is_primary
+
+class Chunk:
+    def __init__(self, chunk_id: int, replicas: list):
+        self.chunk_id = chunk_id
+        self.replicas = replicas
+
+servers = []
+file_map = dict(hashfunc=get_hash)
 
 def seed_servers():
     servers.append(
-        Server("Server A", "1.2.3.4", 8000)
+        Server("Server A", "127.0.0.1", 8080)
     )
 
     servers.append(
-        Server("Server B", "1.2.3.4", 8000)
+        Server("Server B", "127.0.0.1", 8081)
     )
     
     servers.append(
-        Server("Server C", "1.2.3.4", 8000)
+        Server("Server C", "127.0.0.1", 8082)
     )
 
 def seed_files(paths):
-    chunk_id_1 = get_hash(paths[0]) + 1
-    chunk_id_2 = get_hash(paths[0]) + 2
+    # fills the file_map dictionary with one entry, the entries are of the format 
+    # [Replica(ip, port, ...), Replica(ip, port...), Replica(ip, port...)]
+    chunk_id_1 = 1
+    chunk_id_2 = 2
+    # the chunk id  should be a global, incremented value
 
     replica_list_1 = list()
     replica_list_1.append(
-        Replica(servers[0], chunk_id_1, True), # the chunk id probably should be sth else,
-        # either a global, incremented value or a hash of the path combined with the chunk number in a file
+        Replica(servers[0], True)
     )
 
     replica_list_1.append(
-        Replica(servers[1], chunk_id_1, False),
+        Replica(servers[1], False),
     )
 
     replica_list_1.append(
-        Replica(servers[2], chunk_id_1, False),
+        Replica(servers[2], False),
     )
 
     replica_list_2 = list()
     replica_list_2.append(
-        Replica(servers[0], chunk_id_2, True), # the chunk id probably should be sth else,
-        # either a global, incremented value or a hash of the path combined with the chunk number in a file
+        Replica(servers[0], True)
     )
 
     replica_list_2.append(
-        Replica(servers[1], chunk_id_2, False),
+        Replica(servers[1], False),
     )
 
     replica_list_2.append(
-        Replica(servers[2], chunk_id_2, False),
+        Replica(servers[2], False),
     )
 
-    file_map[paths[0]] = [replica_list_1, replica_list_2]
+    file_map[paths[0]] = [Chunk(chunk_id_1, replica_list_1), Chunk(chunk_id_2, replica_list_2)]
 
 def receive_message(sock, length):
     """Helper function to receive exactly 'length' bytes from the socket."""
@@ -119,7 +126,7 @@ def receive_request(sock):
         print("Error: No data received.")
         return
 
-    file_request = file_request_pb2.FileRequest()
+    file_request = dfs_pb2.FileRequest()
     file_request.ParseFromString(protobuf_data)
 
     print(file_request)
@@ -130,27 +137,31 @@ def get_replicas(file_hash, path, offset, size):
     chunk_no = int(offset / CHUNK_SIZE)
 
     if(path not in file_map):
-        replicas_response = replicas_response_pb2.ReplicaList(success=False, replicas=[])
+        replicas_response = dfs_pb2.ChunkList(success=False, chunks=[])
         protobuf_data = replicas_response.SerializeToString()
         return protobuf_data
+    
+    chunks = []
 
-    replica_list = file_map[path][chunk_no]
+    for chunk in file_map[path]:
+        replicas = []
+        replica_list = chunk.replicas
 
-    replicas_proto = []
+        for replica in replica_list:
+            print("Is replica primary?", replica.is_primary)
+            replica_proto = dfs_pb2.Replica()
+            replica_proto.name = replica.server.name
+            replica_proto.ip = replica.server.ip
+            replica_proto.port = replica.server.port
+            # replica_proto.chunk_id = get_hash(path) + chunk_no
+            replica_proto.is_primary = replica.is_primary
+            replicas.append(replica_proto)
+        
+        chunk = dfs_pb2.Chunk(chunk_id = chunk.chunk_id, replicas = replicas)
+        chunks.append(chunk)
 
-    for replica in replica_list:
-        print(replica.is_primary)
-        replica_proto = replicas_response_pb2.Replica()
-        replica_proto.name = path
-        replica_proto.ip = replica.server.ip
-        replica_proto.port = replica.server.port
-        replica_proto.chunk_id = get_hash(path) + chunk_no
-        replica_proto.is_primary = replica.is_primary
-        replicas_proto.append(replica_proto)
-
-    replicas_response = replicas_response_pb2.ReplicaList(success = True, replicas=replicas_proto)
-
-    protobuf_data = replicas_response.SerializeToString()
+    chunk_list = dfs_pb2.ChunkList(success = 1, chunks = chunks)
+    protobuf_data = chunk_list.SerializeToString()
     
     return protobuf_data
 
@@ -166,6 +177,7 @@ def main():
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
         conn = socket.socket()
+        server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             server_sock.bind((SERVER_IP, SERVER_PORT))
             server_sock.listen(1)
@@ -182,7 +194,7 @@ def main():
 
                     msg_length = len(protobuf_data)
 
-                    conn.sendall(msg_length.to_bytes(4, byteorder='big'))
+                    # conn.sendall(msg_length.to_bytes(4, byteorder='big'))
 
                     # Wysłanie samej wiadomości i zakończenie połączenia
                     conn.sendall(protobuf_data)
@@ -191,11 +203,13 @@ def main():
                     print(f"Sent message to client.\nPress q to exit")
                     char = sys.stdin.read(1)
                     if(char == 'q'):
-                        return
+                        break
         except Exception as e:
             print(f"Errorxd: {e}")
         
+        print("after catching exception (or successful try)")
+        
+        server_sock.close()
         conn.close()
-
 
 main()
