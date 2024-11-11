@@ -1,6 +1,0 @@
-syntax = "proto3";
-
-message FileResponse {
-    string filename = 1;
-    bytes filedata = 2;
-}

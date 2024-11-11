@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "iosfwd": "c",
-        "dfs.pb-c.h": "c",
-        "protobuf-c.h": "c",
-        "common.h": "c"
-    }
-}
