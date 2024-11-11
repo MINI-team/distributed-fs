@@ -5,17 +5,39 @@
 const char* SERVER_ADDRESS = "127.0.0.1";
 const uint16_t SERVER_PORT = 8080;
 
-char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
+// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
+char* DEFAULT_PATH = "ala.txt";
+
+void readChunkFile(const char *filename, int connfd)
+{   int     fd;
+    size_t  bytes_read;
+    char    buffer[MAXLINE + 1];
+
+    if ((fd = open(filename, O_RDONLY)) == -1)
+        err_n_die("open error");
+    
+    if ((bytes_read = read(fd, buffer, MAXLINE)) == -1)
+        err_n_die("read error");
+
+    buffer[bytes_read] = '\0';
+
+    close(fd);
+
+    if (write(connfd, buffer, bytes_read) == -1)
+        err_n_die("write error");
+}
 
 void processRequest(char* path, int id, int connfd)
 {
     if (strcmp(path, DEFAULT_PATH) == 0) {
         if (id == 1) {
-            const char *MSG = "Ala ma kota, ";
-            write(connfd, MSG, strlen(MSG));
+            readChunkFile("ala1.chunk", connfd);
+            // const char *MSG = "Ala ma kota, ";
+            // write(connfd, MSG, strlen(MSG));
         } else if (id == 2) {
-            const char *MSG = "a kot ma Ale";
-            write(connfd, MSG, strlen(MSG));
+            readChunkFile("ala2.chunk", connfd);
+            // const char *MSG = "a kot ma Ale";
+            // write(connfd, MSG, strlen(MSG));
         } else {
             goto error;
         }
