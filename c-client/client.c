@@ -6,8 +6,8 @@
 const char* SERVER_ADDRESS = "127.0.0.1";
 const uint16_t SERVER_PORT = 9001;
 
-char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
-
+// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
+char DEFAULT_PATH[MAXLINE+1];
 char* OUTPUT_PATH = "output.txt";
 
 #define OFFSET 13
@@ -48,9 +48,7 @@ void *getChunk(void *voidPtr)
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // servaddr.sin_port = htons(args->port);
-    servaddr.sin_port = htons(8080);
+    servaddr.sin_port = htons(args->port);
 
     if (inet_pton(AF_INET, args->ip, &servaddr.sin_addr) <= 0)
         err_n_die("inet_pton error for %s", args->ip);
@@ -72,7 +70,6 @@ void *getChunk(void *voidPtr)
         err_n_die("pwrite error");
     }
 
-
     close(serverfd);
 }
 
@@ -89,6 +86,11 @@ int main(int argc, char **argv)
     int                 serverfd, outputfd, n, err;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
+
+    if (argc != 3)
+        err_n_die("usage: parameters error");
+
+    strcpy(DEFAULT_PATH, argv[2]);
 
     if ((outputfd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("outputfd error");

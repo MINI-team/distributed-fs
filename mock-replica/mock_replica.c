@@ -5,30 +5,55 @@
 const char* SERVER_ADDRESS = "127.0.0.1";
 const uint16_t SERVER_PORT = 8080;
 
-char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
+// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
+char* DEFAULT_PATH = "ala.txt";
+
+void readChunkFile(const char *chunkname, int connfd)
+{   int     fd;
+    size_t  bytes_read;
+    char    buffer[MAXLINE + 1];
+
+    if ((fd = open(chunkname, O_RDONLY)) == -1)
+        err_n_die("open error");
+    
+    if ((bytes_read = read(fd, buffer, MAXLINE)) == -1)
+        err_n_die("read error");
+
+    buffer[bytes_read] = '\0';
+
+    close(fd);
+
+    if (write(connfd, buffer, bytes_read) == -1)
+        err_n_die("write error");
+}
 
 void processRequest(char* path, int id, int connfd)
 {
-    if (strcmp(path, DEFAULT_PATH) == 0) {
-        if (id == 1) {
-            const char *MSG = "Ala ma kota, ";
-            write(connfd, MSG, strlen(MSG));
-        } else if (id == 2) {
-            const char *MSG = "a kot ma Ale";
-            write(connfd, MSG, strlen(MSG));
-        } else {
-            goto error;
-        }
-    } else {
-        goto error;
-    }
-    return;
+    char chunkname[MAXLINE+1];
+    snprintf(chunkname, sizeof(chunkname), "chunks/%s%d.chunk", path, id);
+    printf("chunkname: %s\n", chunkname);
+    readChunkFile(chunkname, connfd);
+    // if (strcmp(path, DEFAULT_PATH) == 0) {
+    //     if (id == 1) {
+    //         readChunkFile("ala1.chunk", connfd);
+    //         // const char *MSG = "Ala ma kota, ";
+    //         // write(connfd, MSG, strlen(MSG));
+    //     } else if (id == 2) {
+    //         readChunkFile("ala2.chunk", connfd);
+    //         // const char *MSG = "a kot ma Ale";
+    //         // write(connfd, MSG, strlen(MSG));
+    //     } else {
+    //         goto error;
+    //     }
+    // } else {
+    //     goto error;
+    // }
+    // return;
 
-    error:
-    const char *MSG = "Bad request";
-    write(connfd, MSG, strlen(MSG));
+    // error:
+    // const char *MSG = "Bad request";
+    // write(connfd, MSG, strlen(MSG));
 }
-
 int main()
 {
     int                 listenfd, connfd, n;
@@ -38,6 +63,10 @@ int main()
 
     if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
+
+    int option = 1;
+    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
+        err_n_die("setsockopt error");
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
