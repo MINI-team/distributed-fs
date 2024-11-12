@@ -4,7 +4,7 @@
 #include "pthread.h"
 
 const char* SERVER_ADDRESS = "127.0.0.1";
-const uint16_t SERVER_PORT = 8001;
+const uint16_t SERVER_PORT = 9001;
 
 char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
 
@@ -48,7 +48,9 @@ void *getChunk(void *voidPtr)
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(args->port);
+    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // servaddr.sin_port = htons(args->port);
+    servaddr.sin_port = htons(8080);
 
     if (inet_pton(AF_INET, args->ip, &servaddr.sin_addr) <= 0)
         err_n_die("inet_pton error for %s", args->ip);
@@ -64,12 +66,12 @@ void *getChunk(void *voidPtr)
 
     memset(recvline, 0, MAXLINE);
     n = read(serverfd, recvline, MAXLINE);
+    printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
         
     if ((pwrite(args->outputfd, recvline, n, args->offset)) < 0) {
         err_n_die("pwrite error");
     }
 
-    printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
 
     close(serverfd);
 }

@@ -12,8 +12,7 @@ message Replica {
     string name = 1;
     string ip = 2;
     int32 port = 3;
-    // int32 chunk_id = 4;
-    bool is_primary = 5;
+    bool is_primary = 4;
 }
   
 message Chunk {

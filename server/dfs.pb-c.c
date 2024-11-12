@@ -381,7 +381,7 @@ static const ProtobufCFieldDescriptor replica__field_descriptors[4] =
   },
   {
     "is_primary",
-    5,
+    4,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
@@ -398,10 +398,9 @@ static const unsigned replica__field_indices_by_name[] = {
   0,   /* field[0] = name */
   2,   /* field[2] = port */
 };
-static const ProtobufCIntRange replica__number_ranges[2 + 1] =
+static const ProtobufCIntRange replica__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 5, 3 },
   { 0, 4 }
 };
 const ProtobufCMessageDescriptor replica__descriptor =
@@ -415,7 +414,7 @@ const ProtobufCMessageDescriptor replica__descriptor =
   4,
   replica__field_descriptors,
   replica__field_indices_by_name,
-  2,  replica__number_ranges,
+  1,  replica__number_ranges,
   (ProtobufCMessageInit) replica__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

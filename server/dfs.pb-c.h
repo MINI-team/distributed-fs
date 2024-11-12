@@ -46,9 +46,6 @@ struct  Replica
   char *name;
   char *ip;
   int32_t port;
-  /*
-   * int32 chunk_id = 4;
-   */
   protobuf_c_boolean is_primary;
 };
 #define REPLICA__INIT \
