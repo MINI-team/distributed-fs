@@ -14,26 +14,35 @@
 #define MAX_REPLICAS 10
 #define MAX_CHUNKS 10
 
-void setupReplicas(Replica *replicas, int *replicas_count)
+void setupReplicas(Replica **replicas)
 {
-    // replicas[0] = REPLICA__INIT;
-    replicas[0].ip = "127.0.0.1";
-    replicas[0].port = 8080;
+    replicas[0] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[0]);
+    replicas[0]->ip = "127.0.0.1";
+    replicas[0]->port = 8080;
 
-    replicas[1].ip = "127.0.0.1";
-    replicas[1].port = 8081;
-
-    *replicas_count = 2;
+    replicas[1] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[1]);
+    replicas[1]->ip = "127.0.0.1";
+    replicas[1]->port = 8081;
 }
 
-void setupChunk(Chunk *chunk, Replica *replicas)
+void setupChunks(Chunk **chunks, Replica **replicas)
 {
-    Chunk c = CHUNK__INIT;
-    // *chunk = CHUNK__INIT;
-    chunk->chunk_id = 1;
-    // chunk->replicas = replicas;
-    chunk->n_replicas = 2;
+    chunks[0] = (Chunk *)malloc(sizeof(Chunk));
+    chunk__init(chunks[0]);
+    chunks[0]->chunk_id = 1;
+    chunks[0]->replicas = replicas;
+    chunks[0]->n_replicas = 2;
+
+    chunks[1] = (Chunk *)malloc(sizeof(Chunk));
+    chunk__init(chunks[1]);
+    chunks[1]->chunk_id = 2;
+    chunks[1]->replicas = replicas;
+    chunks[1]->n_replicas = 2;
 }
+
+
 
 int main()
 {   
@@ -45,35 +54,17 @@ int main()
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
 
-    Replica             *replicas[MAX_REPLICAS];
+    Replica             *replicas[2];
     int                 replicas_count = 2;
 
-    Chunk               *chunks[MAX_CHUNKS];
-    int                 chunks_count = 1;
-
-    Chunk               chunk1 = CHUNK__INIT;
-    
-    Replica             replica1 = REPLICA__INIT;
-    Replica             replica2 = REPLICA__INIT;
+    Chunk               *chunks[2];
+    int                 chunks_count = 2;
 
     ChunkList           chunkList = CHUNK_LIST__INIT;
 
-    
-    replica1.ip = "127.0.0.1";
-    replica1.port = 8080;
 
-    replica2.ip = "127.0.0.1";
-    replica2.port = 8087;
-
-    replicas[0] = &replica1;
-    replicas[1] = &replica2;
-
-
-    chunk1.chunk_id = 1;
-    chunk1.replicas = replicas;
-    chunk1.n_replicas = replicas_count;
-
-    chunks[0] = &chunk1;
+    setupReplicas(replicas);
+    setupChunks(chunks, replicas);    
 
     chunkList.success = 1;
     chunkList.chunks = chunks;
