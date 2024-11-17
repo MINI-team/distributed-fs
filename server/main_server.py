@@ -172,7 +172,8 @@ def main():
     seed_servers()
 
     # file_1 = "/home/piotr/Desktop/photo1.png"
-    file_1 = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png"
+    # file_1 = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png"
+    file_1 = "ala.txt"
     seed_files([file_1])
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_sock:
