@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "glib.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "common.h": "c",
+        "stdio.h": "c"
     }
 }

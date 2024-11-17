@@ -49,10 +49,10 @@ char *bin2hex(const unsigned char *input, size_t len)
     return result;
 }
 
-// int set_fd_nonblocking(int fd)
-// {
-//     int flags;
-//     if ((flags = fcntl(fd, F_GETFL, flags)) < 0)
-//         err_n_die("fcntl error");
-//     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-// }
+int set_fd_nonblocking(int fd)
+{
+    int flags;
+    if ((flags = fcntl(fd, F_GETFL, flags)) < 0)
+        err_n_die("fcntl error");
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+}
