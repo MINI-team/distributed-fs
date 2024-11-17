@@ -4,17 +4,7 @@
 #include "pthread.h"
 
 const char* SERVER_ADDRESS = "127.0.0.1";
-<<<<<<< HEAD
-const uint16_t SERVER_PORT = 9001;
-=======
-const uint16_t SERVER_PORT = 8001;
 
-// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
-// char* DEFAULT_PATH = "ala.txt";
-char DEFAULT_PATH[MAXLINE+1];
->>>>>>> main
-
-// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
 char DEFAULT_PATH[MAXLINE+1];
 char* OUTPUT_PATH = "output.txt";
 
@@ -95,17 +85,10 @@ int main(int argc, char **argv)
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
-<<<<<<< HEAD
     if (argc != 3)
         err_n_die("usage: parameters error");
 
     strcpy(DEFAULT_PATH, argv[2]);
-=======
-    if (argc != 2)
-        err_n_die("usage: file not specified");
-    
-    strcpy(DEFAULT_PATH, argv[1]);
->>>>>>> main
 
     if ((outputfd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("outputfd error");

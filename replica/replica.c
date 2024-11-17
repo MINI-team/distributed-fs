@@ -3,9 +3,8 @@
 #include "common.h"
 
 const char* SERVER_ADDRESS = "127.0.0.1";
-const uint16_t SERVER_PORT = 8080;
+#define REPLICA_PORT 8080
 
-// char* DEFAULT_PATH = "/home/vlada/Documents/thesis/distributed-fs/server/gfs.png";
 char* DEFAULT_PATH = "ala.txt";
 
 void readChunkFile(const char *chunkname, int connfd)
@@ -30,29 +29,9 @@ void readChunkFile(const char *chunkname, int connfd)
 void processRequest(char* path, int id, int connfd)
 {
     char chunkname[MAXLINE+1];
-    snprintf(chunkname, sizeof(chunkname), "chunks/%s%d.chunk", path, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/chunks/%s%d.chunk", path, id);
     printf("chunkname: %s\n", chunkname);
     readChunkFile(chunkname, connfd);
-    // if (strcmp(path, DEFAULT_PATH) == 0) {
-    //     if (id == 1) {
-    //         readChunkFile("ala1.chunk", connfd);
-    //         // const char *MSG = "Ala ma kota, ";
-    //         // write(connfd, MSG, strlen(MSG));
-    //     } else if (id == 2) {
-    //         readChunkFile("ala2.chunk", connfd);
-    //         // const char *MSG = "a kot ma Ale";
-    //         // write(connfd, MSG, strlen(MSG));
-    //     } else {
-    //         goto error;
-    //     }
-    // } else {
-    //     goto error;
-    // }
-    // return;
-
-    // error:
-    // const char *MSG = "Bad request";
-    // write(connfd, MSG, strlen(MSG));
 }
 int main()
 {
@@ -71,7 +50,7 @@ int main()
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(SERVER_PORT);
+    servaddr.sin_port = htons(REPLICA_PORT);
 
     if ((bind(listenfd, (SA *) &servaddr, sizeof(servaddr))) < 0)
         err_n_die("bind error");
@@ -83,7 +62,7 @@ int main()
         struct sockaddr_in addr;
         socklen_t addrlen;
         
-        printf("Waiting for a connection on port %d\n", SERVER_PORT);
+        printf("Waiting for a connection on port %d\n", REPLICA_PORT);
         fflush(stdout);
         connfd = accept(listenfd, (SA *) NULL, NULL);
 
@@ -102,21 +81,7 @@ int main()
         printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
 
         processRequest(chunkRequest->path, chunkRequest->chunk_id, connfd);
-        // while ((n = read(connfd, recvline, MAXLINE - 1)) > 0) {
-        //     fprintf(stdout, "\n%s\n\n%s", bin2hex(recvline, n), recvline);
 
-        //     if (recvline[n - 1] == '\n') {
-        //         break;
-        //     }
-        //     memset(recvline, 0, MAXLINE);
-        // }
-        // if (n < 0) {
-        //     err_n_die("read error");
-        // }
-
-        // snprintf((char*)buff, sizeof(buff), "Plain tcp server's message \n");
-        
-        // write(connfd, (char*)buff, strlen((char*)buff));
         close(connfd);
     }
 }

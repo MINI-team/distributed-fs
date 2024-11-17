@@ -1,5 +1,0 @@
-<<<<<<< HEAD
-Ala ma kota, Filemona
-=======
-Ala ma kota, a Kot ma Ale
->>>>>>> main

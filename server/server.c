@@ -9,8 +9,6 @@
 #define MAX_EVENTS 5
 #define READ_SIZE 1024
 
-#define SERVER_PORT 9001
-
 #define MAX_REPLICAS 10
 #define MAX_CHUNKS 10
 
@@ -42,10 +40,9 @@ void setupChunks(Chunk **chunks, Replica **replicas)
     chunks[1]->n_replicas = 2;
 }
 
-
-
 int main()
 {   
+    GHashTable *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
     int                 server_socket, client_socket, n;
     struct sockaddr_in  servaddr;
     size_t              bytes_read;
