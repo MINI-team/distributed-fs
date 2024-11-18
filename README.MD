@@ -7,9 +7,9 @@ mkdir build
 cd build
 cmake ..
 make
-./replica
-./server
-./client read ala
+./replica/replica
+./server/server
+./client/client read ala
    ```
 
 
