@@ -19,7 +19,7 @@ Chunks data for replica1 is stored in data_replica1/chunks
 ------------------------------------------------------------------------
 Important issues:
 
-malicious client sends to big request
+malicious client sends too big request
 
 uint32_t len = ntohl(net_len);
 if (len > MAX_ALLOWED_SIZE) {

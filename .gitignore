@@ -1,2 +1,6 @@
 build
 __pycache__
+*.pb-c.h
+*pb-c.c
+*pb
+*pb2.py
