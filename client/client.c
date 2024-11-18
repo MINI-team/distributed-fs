@@ -9,7 +9,7 @@ char DEFAULT_PATH[MAXLINE+1];
 char* OUTPUT_PATH = "output.txt";
 
 #define OFFSET 13
-#define CHUNK_SIZE 13
+#define CHUNK_SIZE 42
 
 typedef struct argsThread
 {
@@ -21,7 +21,7 @@ typedef struct argsThread
     uint16_t port;
 
     int offset;
-    int outputfd;
+    int filefd;
     
 } argsThread_t;
 
@@ -65,31 +65,11 @@ void *getChunk(void *voidPtr)
     n = read(serverfd, recvline, MAXLINE);
     printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
         
-    if ((pwrite(args->outputfd, recvline, n, args->offset)) < 0) {
+    if ((pwrite(args->filefd, recvline, n, args->offset)) < 0) {
         err_n_die("pwrite error");
     }
 
     close(serverfd);
-}
-
-void *putChunk(void *voidPtr)
-{
-    int readfd;
-    size_t bytes_read;
-    argsThread_t *args = voidPtr;
-    char buffer[MAXLINE + 1];
-
-    printf("opening file %s\n", args->path);
-
-    if((readfd = open(args->path, O_RDONLY)) < 0)
-        err_n_die("readfd error");
-
-    if((bytes_read = read(readfd, buffer, MAXLINE)) < 0)
-        err_n_die("read error");
-    
-    buffer[bytes_read] = '\0';
-
-    printf("read from file %s:\n%s\n", args->path, buffer);
 }
 
 void setFileRequest(int arc, char **arv, FileRequest *request) 
@@ -102,12 +82,12 @@ void setFileRequest(int arc, char **arv, FileRequest *request)
 
 void doRead(int argc, char **argv)
 {
-    int                 serverfd, outputfd, n, err;
+    int                 serverfd, filefd, n, err;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
-    if ((outputfd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
-        err_n_die("outputfd error");
+    if ((filefd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+        err_n_die("filefd error");
 
     FileRequest request = FILE_REQUEST__INIT;
     
@@ -172,7 +152,7 @@ void doRead(int argc, char **argv)
         threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
         threads[i].port = chunkList->chunks[i]->replicas[0]->port;
         threads[i].offset = i * OFFSET;
-        threads[i].outputfd = outputfd;
+        threads[i].filefd = filefd;
 
         if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0) {
             err_n_die("couldn't create thread");
@@ -188,14 +168,35 @@ void doRead(int argc, char **argv)
     free(threads);
 }
 
+void *putChunk(void *voidPtr)
+{
+    size_t bytes_read;
+    argsThread_t *args = voidPtr;
+    char buffer[MAXLINE + 1];
+
+    if((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
+        err_n_die("read error");
+    
+    buffer[bytes_read] = '\0';
+
+    // printf("read from file %s:\n%s\n", args->path, buffer);
+    printf("%s\n", buffer);
+}
+
 void doWrite()
 {
-    int n_threads = 2, err;
+    int n_threads = 2, err, filefd;
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
 
     snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
-    // snprintf(path, sizeof(path), "data_replica1/chunks/%s", DEFAULT_PATH);
+
+    printf("opening file %s\n", path);
+
+    if((filefd = open(path, O_RDONLY)) < 0)
+        err_n_die("filefd error");
+    
+    // printf("fd is %d\n", filefd);
 
     for (int i = 0; i < n_threads; i++) {
 
@@ -206,7 +207,7 @@ void doWrite()
         // threads[i].port = chunkList->chunks[i]->replicas[0]->port;
         threads[i].port = 0;
         threads[i].offset = i * CHUNK_SIZE;
-        threads[i].outputfd = 0;
+        threads[i].filefd = filefd;
 
         if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0) {
             err_n_die("couldn't create thread");
