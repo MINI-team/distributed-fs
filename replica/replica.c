@@ -78,16 +78,12 @@ int main()
 
         memset(operation_type_buff, 0, MAXLINE);
         n = read(connfd, operation_type_buff, operation_type_length);
-        // operation_type_buff[operation_type_length + 1] = '\0';
 
         printf("operation_type: %s\n", operation_type_buff);
 
-        // memset(recvline, 0, MAXLINE);
-        // n = bulk_read(connfd, recvline, 15);
-        // printf("received chunk for writing:\n%s\n", recvline);
-
         if(strcmp(operation_type_buff, "read") == 0)
         {
+            printf("received read request\n");
             n = read(connfd, &proto_length, sizeof(proto_length));
             proto_length = ntohl(proto_length);
             printf("proto_length: %d\n", proto_length);
@@ -103,14 +99,22 @@ int main()
         }
         else if(strcmp(operation_type_buff, "write") == 0)
         {
-            // n = read(connfd, &proto_length, sizeof(proto_length));
-            // proto_length = ntohl(proto_length);
-            // printf("proto_length: %d\n", proto_length);
+            printf("received write request\n");
+            n = read(connfd, &proto_length, sizeof(proto_length));
+            proto_length = ntohl(proto_length);
+            printf("proto_length: %d\n", proto_length);
+
+            memset(recvline, 0, MAXLINE);
+            n = read(connfd, recvline, proto_length);
+            ChunkRequest *chunkRequest = chunk_request__unpack(NULL, n, recvline);
+
+            printf("chunkRequest->path: %s\n", chunkRequest->path);
+            printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
 
             memset(recvline, 0, MAXLINE);
             n = read(connfd, recvline, MAXLINE);
 
-            printf("received chunk for writing:\n%s\n", recvline);
+            printf("received chunk:\n%s\n", recvline);
         }
         else
             err_n_die("wrong operation type");

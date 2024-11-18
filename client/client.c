@@ -55,19 +55,19 @@ void *getChunk(void *voidPtr)
     if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("connect error");
 
-    int network_length = htonl(len); // TO FIX
-    write(serverfd, &network_length, sizeof(network_length));
+    int net_len = htonl(len); // TO FIX
+    write(serverfd, &net_len, sizeof(net_len));
 
     strcpy(op_type, "read");
 
-    network_length = htonl(strlen(op_type) + 1);
+    net_len = htonl(strlen(op_type) + 1);
 
-    write(serverfd, &network_length, sizeof(network_length));
+    write(serverfd, &net_len, sizeof(net_len));
 
     write(serverfd, op_type, strlen(op_type) + 1);
 
-    network_length = htonl(len);
-    write(serverfd, &network_length, sizeof(network_length));
+    net_len = htonl(len);
+    write(serverfd, &net_len, sizeof(net_len));
 
     write(serverfd, buffer, len);
 
@@ -180,22 +180,37 @@ void doRead(int argc, char **argv)
     free(threads);
 }
 
+// void setChunkRequest(ChunkRequest *request, )
+// {
+
+// }
+
 void *putChunk(void *voidPtr)
 {
-    int replicafd, network_length;
+    int replicafd, net_len;
     struct sockaddr_in repladdr;
-    size_t bytes_read;
+    size_t bytes_read, proto_len;
     argsThread_t *args = voidPtr;
-    char buffer[MAXLINE + 1], op_type[MAXLINE + 1];
-    char buff[MAXLINE + 1];
+    char op_type[MAXLINE + 1], buffer[MAXLINE + 1];
+    uint8_t *proto_buf;
 
-    if((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
+    if ((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
         err_n_die("read error");
-    
+
     buffer[bytes_read] = '\0';
 
     // printf("read from file %s:\n%s\n", args->path, buffer);
     printf("%s\n", buffer);
+
+    ChunkRequest request = CHUNK_REQUEST__INIT;
+
+    printf("chunk id is: %d\n", args->chunk_id);
+    request.chunk_id = args->chunk_id;
+    request.path = args->path;
+
+    proto_len = chunk_request__get_packed_size(&request);
+    proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
+    chunk_request__pack(&request, proto_buf);
 
     memset(&repladdr, 0, sizeof(repladdr));
     repladdr.sin_family = AF_INET;
@@ -210,17 +225,20 @@ void *putChunk(void *voidPtr)
     if(connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
         err_n_die("connect error");
     
-    network_length = htonl(CHUNK_SIZE);
+    net_len = htonl(CHUNK_SIZE);
 
-    write(replicafd, &network_length, sizeof(network_length)); // this is supposed to be the size of the whole message, but idk why we would use that
+    write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
 
     strcpy(op_type, "write");
-
-    network_length = htonl(strlen(op_type) + 1);
-    
-    write(replicafd, &network_length, sizeof(network_length));
+    net_len = htonl(strlen(op_type) + 1);
+    write(replicafd, &net_len, sizeof(net_len));
 
     write(replicafd, op_type, strlen(op_type) + 1);
+
+    net_len = htonl(proto_len);
+    write(replicafd, &net_len, sizeof(net_len));
+
+    write(replicafd, proto_buf, proto_len);
 
     write(replicafd, buffer, bytes_read);
 
