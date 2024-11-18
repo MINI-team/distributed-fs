@@ -9,6 +9,7 @@ char DEFAULT_PATH[MAXLINE+1];
 char* OUTPUT_PATH = "output.txt";
 
 #define OFFSET 13
+#define CHUNK_SIZE 13
 
 typedef struct argsThread
 {
@@ -71,6 +72,26 @@ void *getChunk(void *voidPtr)
     close(serverfd);
 }
 
+void *putChunk(void *voidPtr)
+{
+    int readfd;
+    size_t bytes_read;
+    argsThread_t *args = voidPtr;
+    char buffer[MAXLINE + 1];
+
+    printf("opening file %s\n", args->path);
+
+    if((readfd = open(args->path, O_RDONLY)) < 0)
+        err_n_die("readfd error");
+
+    if((bytes_read = read(readfd, buffer, MAXLINE)) < 0)
+        err_n_die("read error");
+    
+    buffer[bytes_read] = '\0';
+
+    printf("read from file %s:\n%s\n", args->path, buffer);
+}
+
 void setFileRequest(int arc, char **arv, FileRequest *request) 
 {
     // request->path = "test.txt";
@@ -79,16 +100,11 @@ void setFileRequest(int arc, char **arv, FileRequest *request)
     request->size = 0;
 }
 
-int main(int argc, char **argv) 
+void doRead(int argc, char **argv)
 {
     int                 serverfd, outputfd, n, err;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
-
-    if (argc != 3)
-        err_n_die("usage: parameters error");
-
-    strcpy(DEFAULT_PATH, argv[2]);
 
     if ((outputfd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("outputfd error");
@@ -170,4 +186,57 @@ int main(int argc, char **argv)
     }
 
     free(threads);
+}
+
+void doWrite()
+{
+    int n_threads = 2, err;
+    argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
+    char path[2 * (MAXLINE + 1)];
+
+    snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
+    // snprintf(path, sizeof(path), "data_replica1/chunks/%s", DEFAULT_PATH);
+
+    for (int i = 0; i < n_threads; i++) {
+
+        threads[i].chunk_id = i;
+        threads[i].path = path;
+        // threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
+        threads[i].ip = "";
+        // threads[i].port = chunkList->chunks[i]->replicas[0]->port;
+        threads[i].port = 0;
+        threads[i].offset = i * CHUNK_SIZE;
+        threads[i].outputfd = 0;
+
+        if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0) {
+            err_n_die("couldn't create thread");
+        }
+    }
+
+    for (int i = 0; i < n_threads; i++) {
+        if ((err = pthread_join(threads[i].tid, NULL)) != 0) {
+            err_n_die("couldn't join thread");
+        }
+    }
+
+    free(threads);
+}
+
+int main(int argc, char **argv) 
+{
+    if (argc != 3)
+        err_n_die("usage: parameters error");
+
+    strcpy(DEFAULT_PATH, argv[2]);
+
+    // printf("%s\n", argv[0]);
+    // printf("|%s|\n", argv[1]);
+    // printf("%s\n", argv[2]);
+
+    if(strcmp(argv[1], "read") == 0)
+        doRead(argc, argv);
+    else if(strcmp(argv[1], "write") == 0)
+        doWrite();
+    else
+        err_n_die("usage: wrong client request");
 }
