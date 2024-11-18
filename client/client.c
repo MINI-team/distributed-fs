@@ -29,7 +29,7 @@ void *getChunk(void *voidPtr)
 {
     int                 serverfd, n;
     struct sockaddr_in  servaddr;
-    char                recvline[MAXLINE];
+    char                recvline[MAXLINE], op_type[MAXLINE];
 
     argsThread_t *args = voidPtr;
     printf("[tid: %lu] chunk_id: %d\n", pthread_self(), args->chunk_id);
@@ -55,10 +55,22 @@ void *getChunk(void *voidPtr)
     if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("connect error");
 
-    int network_length = htonl(len);
+    int network_length = htonl(len); // TO FIX
+    write(serverfd, &network_length, sizeof(network_length));
+
+    strcpy(op_type, "read");
+
+    network_length = htonl(strlen(op_type) + 1);
+
+    write(serverfd, &network_length, sizeof(network_length));
+
+    write(serverfd, op_type, strlen(op_type) + 1);
+
+    network_length = htonl(len);
     write(serverfd, &network_length, sizeof(network_length));
 
     write(serverfd, buffer, len);
+
     free(buffer);
 
     memset(recvline, 0, MAXLINE);
@@ -170,9 +182,12 @@ void doRead(int argc, char **argv)
 
 void *putChunk(void *voidPtr)
 {
+    int replicafd, network_length;
+    struct sockaddr_in repladdr;
     size_t bytes_read;
     argsThread_t *args = voidPtr;
-    char buffer[MAXLINE + 1];
+    char buffer[MAXLINE + 1], op_type[MAXLINE + 1];
+    char buff[MAXLINE + 1];
 
     if((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
         err_n_die("read error");
@@ -181,6 +196,35 @@ void *putChunk(void *voidPtr)
 
     // printf("read from file %s:\n%s\n", args->path, buffer);
     printf("%s\n", buffer);
+
+    memset(&repladdr, 0, sizeof(repladdr));
+    repladdr.sin_family = AF_INET;
+    repladdr.sin_port = htons(args->port);
+
+    if(inet_pton(AF_INET, args->ip, &repladdr.sin_addr) < 0)
+        err_n_die("inet_pton error for %s", args->ip);
+    
+    if((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
+
+    if(connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
+        err_n_die("connect error");
+    
+    network_length = htonl(CHUNK_SIZE);
+
+    write(replicafd, &network_length, sizeof(network_length)); // this is supposed to be the size of the whole message, but idk why we would use that
+
+    strcpy(op_type, "write");
+
+    network_length = htonl(strlen(op_type) + 1);
+    
+    write(replicafd, &network_length, sizeof(network_length));
+
+    write(replicafd, op_type, strlen(op_type) + 1);
+
+    write(replicafd, buffer, bytes_read);
+
+    close(replicafd);
 }
 
 void doWrite()
@@ -203,9 +247,9 @@ void doWrite()
         threads[i].chunk_id = i;
         threads[i].path = path;
         // threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
-        threads[i].ip = "";
+        threads[i].ip = "127.0.0.1";
         // threads[i].port = chunkList->chunks[i]->replicas[0]->port;
-        threads[i].port = 0;
+        threads[i].port = 8080;
         threads[i].offset = i * CHUNK_SIZE;
         threads[i].filefd = filefd;
 
