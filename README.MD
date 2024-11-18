@@ -1,16 +1,17 @@
+
+
+   ```bash
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
-
-
 bash setup.bash
 mkdir build
 cd build
 cmake ..
 make
-
 ./replica
 ./server
-
 ./client read ala
+   ```
+
 
 Chunks data for replica1 is stored in data_replica1/chunks
 
