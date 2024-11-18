@@ -3,7 +3,8 @@
 #include "common.h"
 
 const char* SERVER_ADDRESS = "127.0.0.1";
-#define REPLICA_PORT 8080
+// #define REPLICA_PORT 8080
+int REPLICA_PORT = 8080;
 
 char* DEFAULT_PATH = "ala.txt";
 
@@ -55,12 +56,17 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length)
     writeChunkFile(chunkname, data, length);
 }
 
-int main()
+int main(int argc, char **argv)
 {
     int                 listenfd, connfd, n;
     struct sockaddr_in  servaddr;
     uint8_t             operation_type_buff[MAXLINE + 1];
     uint8_t             recvline[MAXLINE + 1];
+
+    if(argc >= 2)
+    {
+        REPLICA_PORT = atoi(argv[1]);
+    }
 
     if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
