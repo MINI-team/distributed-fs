@@ -1,4 +1,6 @@
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
+
+
 bash setup.bash
 mkdir build
 cd build
