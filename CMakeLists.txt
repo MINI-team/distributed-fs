@@ -15,7 +15,7 @@ include_directories(
 )
 
 add_subdirectory(shared)
-link_libraries(shared ${PROTOBUF_C_LIBRARIES} ${GLIB_LIBRARIES})
+link_libraries(shared ${PROTOBUF_C_LIBRARIES} ${GLIB_LIBRARIES} pthread)
 
 add_subdirectory(server)
 add_subdirectory(client)
