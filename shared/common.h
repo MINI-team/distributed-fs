@@ -18,7 +18,7 @@
 
 // #define SERVER_PORT 18000
 
-#define MAXLINE 40096
+#define MAXLINE 40096 // ADDITIONAL ZERO?
 #define SERVER_PORT 9001
 #define SA struct sockaddr
 
