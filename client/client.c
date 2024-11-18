@@ -48,13 +48,13 @@ void setupChunks(Chunk **chunks, Replica **replicas)
 {
     chunks[0] = (Chunk *)malloc(sizeof(Chunk));
     chunk__init(chunks[0]);
-    chunks[0]->chunk_id = 1;
+    chunks[0]->chunk_id = 0;
     chunks[0]->replicas = replicas;
     chunks[0]->n_replicas = 2;
 
     chunks[1] = (Chunk *)malloc(sizeof(Chunk));
     chunk__init(chunks[1]);
-    chunks[1]->chunk_id = 2;
+    chunks[1]->chunk_id = 1;
     chunks[1]->replicas = replicas;
     chunks[1]->n_replicas = 2;
 }
@@ -227,32 +227,10 @@ void *putChunk(void *voidPtr)
     // printf("read from file %s:\n%s\n", args->path, buffer);
     printf("%s\n", buffer);
 
-    strcpy(op_type, "write");
+    strcpy(op_type, "write_primary");
 
-    // ChunkRequest request = CHUNK_REQUEST__INIT;
-    // WriteChunk request = CHUNK_REQUEST__INIT;
-    // Chunk request = CHUNK__INIT;
-
-    printf("chunk id is: %d\n", args->chunk_id);
-    // request.chunk_id = args->chunk_id;
-    // request.path = args->path;
-    // request.n_replicas = 2;
-
-    for (int i = 0; i < 2; i++)
-    {
-        char name[MAXLINE];
-        Replica replica = REPLICA__INIT;
-        sprintf(name, "Replica %c", 'A' + i);
-        replica.ip = "127.0.0.1";
-        replica.port = 8080 + i;
-        replica.name = name;
-        replica.is_primary = i == 0 ? 1 : 0;
-    }
-
-    // proto_len = chunk_request__get_packed_size(&request);
     proto_len = chunk__get_packed_size(chunks[args->chunk_id]);
     proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    // chunk_request__pack(&request, proto_buf);
     chunk__pack(chunks[args->chunk_id], proto_buf);
 
     memset(&repladdr, 0, sizeof(repladdr));

@@ -49,10 +49,56 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
     close(fd);
 }
 
-void processWriteRequest(char *path, int id, uint8_t *data, int length)
+void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
+{
+    int replicafd, net_len;
+    struct sockaddr_in repladdr;
+    size_t proto_len;
+    // argsThread_t *args = voidPtr;
+    char op_type[MAXLINE + 1];
+    uint8_t *proto_buf;
+
+    strcpy(op_type, "write");
+
+    proto_len = chunk__get_packed_size(chunk);
+    proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
+    chunk__pack(chunk, proto_buf);
+
+    for(int i = 0; i < chunk->n_replicas; i++)
+    {
+        if (chunk->replicas[i]->port == REPLICA_PORT) // SIMPLE HEURISTIC FOR NOW
+            continue;
+        memset(&repladdr, 0, sizeof(repladdr));
+        repladdr.sin_family = AF_INET;
+        repladdr.sin_port = htons(chunk->replicas[i]->port);
+
+        if (inet_pton(AF_INET, chunk->replicas[i]->ip, &repladdr.sin_addr) < 0)
+            err_n_die("inet_pton error for %s", chunk->replicas[i]->ip);
+
+        if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+            err_n_die("socket error");
+
+        if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
+            err_n_die("connect error");
+
+        net_len = htonl(CHUNK_SIZE);
+        write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
+
+        write_len_and_data(replicafd, strlen(op_type) + 1, op_type);
+
+        write_len_and_data(replicafd, proto_len, proto_buf);
+
+        write_len_and_data(replicafd, data_len, data);
+
+        close(replicafd);
+    }
+}
+
+void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/chunks/%d.chunk", id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica%d/chunks/%d.chunk", 
+        REPLICA_PORT, id);
     printf("chunkname: %s\n", chunkname);
     writeChunkFile(chunkname, data, length);
 }
@@ -127,7 +173,7 @@ int main(int argc, char **argv)
 
             processRequest(chunkRequest->path, chunkRequest->chunk_id, connfd);
         }
-        else if (strcmp(operation_type_buff, "write") == 0)
+        else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
         {
             printf("received write request\n");
             n = read(connfd, &proto_len, sizeof(proto_len));
@@ -158,7 +204,10 @@ int main(int argc, char **argv)
 
             printf("received chunk:\n%s\n", recvline);
 
-            processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len);
+            processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
+
+            if (strcmp(operation_type_buff, "write_primary") == 0)
+                forwardChunk(chunk, recvline, buf_len);
         }
         else
             err_n_die("wrong operation type");
