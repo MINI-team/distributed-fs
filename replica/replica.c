@@ -97,7 +97,7 @@ void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
 void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica%d/chunks/%d.chunk", 
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%d.chunk", 
         REPLICA_PORT, id);
     printf("chunkname: %s\n", chunkname);
     writeChunkFile(chunkname, data, length);
