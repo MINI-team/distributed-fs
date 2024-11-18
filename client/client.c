@@ -180,11 +180,6 @@ void doRead(int argc, char **argv)
     free(threads);
 }
 
-// void setChunkRequest(ChunkRequest *request, )
-// {
-
-// }
-
 void *putChunk(void *voidPtr)
 {
     int replicafd, net_len;
@@ -239,6 +234,9 @@ void *putChunk(void *voidPtr)
     write(replicafd, &net_len, sizeof(net_len));
 
     write(replicafd, proto_buf, proto_len);
+
+    net_len = htonl(bytes_read);
+    write(replicafd, &net_len, sizeof(net_len));
 
     write(replicafd, buffer, bytes_read);
 
