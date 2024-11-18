@@ -27,5 +27,6 @@
 void err_n_die(const char *fmt, ...);
 char* bin2hex(const unsigned char *input, size_t len);
 int set_fd_nonblocking(int fd);
+void write_len_and_data(int fd, int len, uint8_t *data);
 
 #endif

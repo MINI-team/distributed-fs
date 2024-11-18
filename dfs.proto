@@ -25,12 +25,16 @@ message ChunkList {
     repeated Chunk chunks = 2;
 }
 
-
 message ChunkRequest {
     string path = 1;
     int32 chunk_id = 2;
 }
 
+message WriteChunk {
+    string path = 1;
+    int32 chunk_id = 2;
+    repeated Replica replicas = 3;
+}
 
 message FileResponse {
     string filename = 1;
