@@ -2,20 +2,21 @@
 #include "dfs.pb-c.h"
 #include "common.h"
 
-const char* SERVER_ADDRESS = "127.0.0.1";
+const char *SERVER_ADDRESS = "127.0.0.1";
 // #define REPLICA_PORT 8080
 int REPLICA_PORT = 8080;
 
-char* DEFAULT_PATH = "ala.txt";
+char *DEFAULT_PATH = "ala.txt";
 
 void readChunkFile(const char *chunkname, int connfd)
-{   int     fd;
-    size_t  bytes_read;
-    char    buffer[MAXLINE + 1];
+{
+    int fd;
+    size_t bytes_read;
+    char buffer[MAXLINE + 1];
 
     if ((fd = open(chunkname, O_RDONLY)) == -1)
         err_n_die("open error");
-    
+
     if ((bytes_read = read(fd, buffer, MAXLINE)) == -1)
         err_n_die("read error");
 
@@ -27,9 +28,9 @@ void readChunkFile(const char *chunkname, int connfd)
         err_n_die("write error");
 }
 
-void processRequest(char* path, int id, int connfd)
+void processRequest(char *path, int id, int connfd)
 {
-    char chunkname[MAXLINE+1];
+    char chunkname[MAXLINE + 1];
     snprintf(chunkname, sizeof(chunkname), "data_replica1/chunks/%s%d.chunk", path, id);
     printf("chunkname: %s\n", chunkname);
     readChunkFile(chunkname, connfd);
@@ -58,12 +59,12 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length)
 
 int main(int argc, char **argv)
 {
-    int                 listenfd, connfd, n;
-    struct sockaddr_in  servaddr;
-    uint8_t             operation_type_buff[MAXLINE + 1];
-    uint8_t             recvline[MAXLINE + 1];
+    int listenfd, connfd, n;
+    struct sockaddr_in servaddr;
+    uint8_t operation_type_buff[MAXLINE + 1];
+    uint8_t recvline[MAXLINE + 1];
 
-    if(argc >= 2)
+    if (argc >= 2)
     {
         REPLICA_PORT = atoi(argv[1]);
     }
@@ -80,20 +81,21 @@ int main(int argc, char **argv)
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port = htons(REPLICA_PORT);
 
-    if ((bind(listenfd, (SA *) &servaddr, sizeof(servaddr))) < 0)
+    if ((bind(listenfd, (SA *)&servaddr, sizeof(servaddr))) < 0)
         err_n_die("bind error");
 
     if (listen(listenfd, 10) < 0)
         err_n_die("listen error");
 
-    for (; ; ) {
+    for (;;)
+    {
         struct sockaddr_in addr;
         socklen_t addrlen;
-        
+
         printf("Waiting for a connection on port %d\n", REPLICA_PORT);
         fflush(stdout);
-        connfd = accept(listenfd, (SA *) NULL, NULL);
-        
+        connfd = accept(listenfd, (SA *)NULL, NULL);
+
         int msg_len, op_type_len, proto_len, buf_len;
         n = read(connfd, &msg_len, sizeof(msg_len));
         msg_len = ntohl(msg_len);
@@ -109,7 +111,7 @@ int main(int argc, char **argv)
 
         printf("operation_type: %s\n", operation_type_buff);
 
-        if(strcmp(operation_type_buff, "read") == 0)
+        if (strcmp(operation_type_buff, "read") == 0)
         {
             printf("received read request\n");
             n = read(connfd, &proto_len, sizeof(proto_len));
@@ -125,7 +127,7 @@ int main(int argc, char **argv)
 
             processRequest(chunkRequest->path, chunkRequest->chunk_id, connfd);
         }
-        else if(strcmp(operation_type_buff, "write") == 0)
+        else if (strcmp(operation_type_buff, "write") == 0)
         {
             printf("received write request\n");
             n = read(connfd, &proto_len, sizeof(proto_len));
@@ -134,10 +136,18 @@ int main(int argc, char **argv)
 
             memset(recvline, 0, MAXLINE);
             n = read(connfd, recvline, proto_len);
-            ChunkRequest *chunkRequest = chunk_request__unpack(NULL, n, recvline);
+            Chunk *chunk = chunk__unpack(NULL, n, recvline);
 
-            printf("chunkRequest->path: %s\n", chunkRequest->path);
-            printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
+            // printf("chunk->path: %s\n", chunk->path);
+            printf("chunk->chunk_id: %d\n", chunk->chunk_id);
+            printf("chunk->n_replicas: %ld\n", chunk->n_replicas);
+
+            for (int i = 0; i < chunk->n_replicas; i++)
+            {
+                printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
+                       chunk->replicas[i]->name, chunk->replicas[i]->ip,
+                       chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+            }
 
             n = read(connfd, &buf_len, sizeof(buf_len));
             buf_len = ntohl(buf_len);
@@ -148,7 +158,7 @@ int main(int argc, char **argv)
 
             printf("received chunk:\n%s\n", recvline);
 
-            processWriteRequest(chunkRequest->path, chunkRequest->chunk_id, recvline, buf_len);
+            processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len);
         }
         else
             err_n_die("wrong operation type");

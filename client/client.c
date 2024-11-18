@@ -8,6 +8,10 @@ const char *SERVER_ADDRESS = "127.0.0.1";
 char DEFAULT_PATH[MAXLINE + 1];
 char *OUTPUT_PATH = "output.txt";
 
+Replica *replicas[2];
+// int replicas_count = 2;
+Chunk *chunks[2];
+
 #define OFFSET 13
 #define CHUNK_SIZE 42
 
@@ -24,6 +28,36 @@ typedef struct argsThread
     int filefd;
 
 } argsThread_t;
+
+void setupReplicas(Replica **replicas)
+{
+    replicas[0] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[0]);
+    replicas[0]->ip = "127.0.0.1";
+    replicas[0]->port = 8080;
+    replicas[0]->name = "Replica A";
+
+    replicas[1] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[1]);
+    replicas[1]->ip = "127.0.0.1";
+    replicas[1]->port = 8081;
+    replicas[1]->name = "Replica B";
+}
+
+void setupChunks(Chunk **chunks, Replica **replicas)
+{
+    chunks[0] = (Chunk *)malloc(sizeof(Chunk));
+    chunk__init(chunks[0]);
+    chunks[0]->chunk_id = 1;
+    chunks[0]->replicas = replicas;
+    chunks[0]->n_replicas = 2;
+
+    chunks[1] = (Chunk *)malloc(sizeof(Chunk));
+    chunk__init(chunks[1]);
+    chunks[1]->chunk_id = 2;
+    chunks[1]->replicas = replicas;
+    chunks[1]->n_replicas = 2;
+}
 
 void *getChunk(void *voidPtr)
 {
@@ -195,23 +229,31 @@ void *putChunk(void *voidPtr)
 
     strcpy(op_type, "write");
 
-    ChunkRequest request = CHUNK_REQUEST__INIT;
+    // ChunkRequest request = CHUNK_REQUEST__INIT;
     // WriteChunk request = CHUNK_REQUEST__INIT;
+    // Chunk request = CHUNK__INIT;
 
     printf("chunk id is: %d\n", args->chunk_id);
-    request.chunk_id = args->chunk_id;
-    request.path = args->path;
-    // request.n_replicas = 0;
+    // request.chunk_id = args->chunk_id;
+    // request.path = args->path;
+    // request.n_replicas = 2;
 
-    // for(int i = 0; i < 2; i++)
-    // {
-    //     Replica replica = REPLICA__INIT;
-    //     replica.ip;
-    // }
+    for (int i = 0; i < 2; i++)
+    {
+        char name[MAXLINE];
+        Replica replica = REPLICA__INIT;
+        sprintf(name, "Replica %c", 'A' + i);
+        replica.ip = "127.0.0.1";
+        replica.port = 8080 + i;
+        replica.name = name;
+        replica.is_primary = i == 0 ? 1 : 0;
+    }
 
-    proto_len = chunk_request__get_packed_size(&request);
+    // proto_len = chunk_request__get_packed_size(&request);
+    proto_len = chunk__get_packed_size(chunks[args->chunk_id]);
     proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    chunk_request__pack(&request, proto_buf);
+    // chunk_request__pack(&request, proto_buf);
+    chunk__pack(chunks[args->chunk_id], proto_buf);
 
     memset(&repladdr, 0, sizeof(repladdr));
     repladdr.sin_family = AF_INET;
@@ -243,6 +285,9 @@ void doWrite()
     int n_threads = 2, err, filefd;
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
+
+    setupReplicas(replicas);
+    setupChunks(chunks, replicas);
 
     snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
 
