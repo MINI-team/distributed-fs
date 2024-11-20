@@ -8,7 +8,7 @@ const char *SERVER_ADDRESS = "127.0.0.1";
 char DEFAULT_PATH[MAXLINE + 1];
 char *OUTPUT_PATH = "output.txt";
 
-Replica *replicas[2];
+Replica *replicas[2]; // has to be chaged 
 // int replicas_count = 2;
 Chunk *chunks[2];
 
@@ -121,9 +121,9 @@ void setFileRequest(int arc, char **arv, FileRequest *request)
 
 void doRead(int argc, char **argv)
 {
-    int serverfd, filefd, n, err;
-    struct sockaddr_in servaddr;
-    char recvline[MAXLINE];
+    int                 serverfd, filefd, n, err;
+    struct sockaddr_in  servaddr;
+    char                recvline[MAXLINE];
 
     if ((filefd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
@@ -264,6 +264,7 @@ void doWrite()
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
 
+    // tutaj przychodza z mastera informacje od replikach i chunkach
     setupReplicas(replicas);
     setupChunks(chunks, replicas);
 

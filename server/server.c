@@ -147,7 +147,6 @@ int main()
                 running = 0;
                 break;
             }
-
         }
     }
     close(epoll_fd);
