@@ -12,6 +12,34 @@
 #define MAX_REPLICAS 10
 #define MAX_CHUNKS 10
 
+void initialize_replicas(replica_info **all_replicas)
+{
+    all_replicas[0] = (replica_info *)malloc(sizeof(replica_info));
+    replica__init(all_replicas[0]);
+    all_replicas[0]->ip = "127.0.0.1";
+    all_replicas[0]->port = 8080;
+
+    all_replicas[1] = (replica_info *)malloc(sizeof(replica_info));
+    replica__init(all_replicas[1]);
+    all_replicas[1]->ip = "127.0.0.1";
+    all_replicas[1]->port = 8081;
+
+    all_replicas[2] = (replica_info *)malloc(sizeof(replica_info));
+    replica__init(all_replicas[2]);
+    all_replicas[2]->ip = "127.0.0.1";
+    all_replicas[2]->port = 8082;
+
+    all_replicas[3] = (replica_info *)malloc(sizeof(replica_info));
+    replica__init(all_replicas[3]);
+    all_replicas[3]->ip = "127.0.0.1";
+    all_replicas[3]->port = 8083;
+
+    all_replicas[4] = (replica_info *)malloc(sizeof(replica_info));
+    replica__init(all_replicas[4]);
+    all_replicas[4]->ip = "127.0.0.1";
+    all_replicas[4]->port = 8084;
+}
+
 void setupReplicas(Replica **replicas)
 {
     replicas[0] = (Replica *)malloc(sizeof(Replica));
@@ -23,6 +51,11 @@ void setupReplicas(Replica **replicas)
     replica__init(replicas[1]);
     replicas[1]->ip = "127.0.0.1";
     replicas[1]->port = 8081;
+    
+    replicas[2] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[2]);
+    replicas[2]->ip = "127.0.0.1";
+    replicas[2]->port = 8082;
 }
 
 void setupChunks(Chunk **chunks, Replica **replicas)
@@ -51,16 +84,21 @@ int main()
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
 
-    Replica             *replicas[2];
-    int                 replicas_count = 2;
+    replica_info        *all_replicas[MAX_REPLICAS]; // this are all replicas master knows
+
+    Replica             *replicas[3]; // this an array of replicas we send tot the client
+    int                 replicas_count = 3;
 
     Chunk               *chunks[2];
     int                 chunks_count = 2;
 
     ChunkList           chunkList = CHUNK_LIST__INIT;
 
+    
 
-    setupReplicas(replicas);
+
+    initialize_replicas(all_replicas);
+    // setupReplicas(replicas);
     setupChunks(chunks, replicas);    
 
     chunkList.success = 1;
@@ -109,10 +147,11 @@ int main()
         for (int i = 0; i < event_count; i++) {
             printf("Reading file descriptor: %d\n", events[i].data.fd);
 
-            if (events[i].data.fd == server_socket) 
-            {
-                client_socket = accept(server_socket, (SA *)NULL, NULL);
-                
+            if (events[i].data.fd == server_socket)
+            {   
+                /* New client handling */
+
+
                 uint32_t net_len;
                 
                 read(client_socket, &net_len, sizeof(net_len));
@@ -141,6 +180,10 @@ int main()
                     err_n_die("write error");
 
                 close(client_socket);
+            }
+            else if (events[i].data.fd != 0)
+            {
+                
             }
             else if (events[i].data.fd == 0)
             {

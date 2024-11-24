@@ -264,7 +264,7 @@ void doWrite()
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
 
-    // tutaj przychodza z mastera informacje od replikach i chunkach
+    // tutaj przychodza z mastera informacje od replikach i chunach
     setupReplicas(replicas);
     setupChunks(chunks, replicas);
 

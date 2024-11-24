@@ -24,9 +24,16 @@
 
 #define CHUNK_SIZE 42
 
+typedef struct {
+    int id;
+    char *ip;
+    int32_t port;
+    int stored_chunks;
+} replica_info;
+
 void err_n_die(const char *fmt, ...);
 char* bin2hex(const unsigned char *input, size_t len);
 int set_fd_nonblocking(int fd);
 void write_len_and_data(int fd, int len, uint8_t *data);
 
-#endif
+#endif      
