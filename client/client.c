@@ -264,8 +264,8 @@ void doWrite()
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
 
-    setupReplicas(replicas);
-    setupChunks(chunks, replicas);
+    setupReplicas(replicas); // <------------------------------- REPLACE THIS
+    setupChunks(chunks, replicas); // <------------------------------- REPLACE THIS
 
     snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
 
@@ -282,9 +282,9 @@ void doWrite()
         threads[i].chunk_id = i;
         threads[i].path = path;
         // threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
-        threads[i].ip = "127.0.0.1";
+        threads[i].ip = "127.0.0.1"; // <------------------------------- REPLACE THIS (ip of client)
         // threads[i].port = chunkList->chunks[i]->replicas[0]->port;
-        threads[i].port = 8080;
+        threads[i].port = 8080; // <------------------------------- REPLACE THIS (port of client)
         threads[i].offset = i * CHUNK_SIZE;
         threads[i].filefd = filefd;
 

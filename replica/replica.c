@@ -51,11 +51,11 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
 
 void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
 {
-    int replicafd, net_len;
+    int replicafd, net_len, msg_len;
     struct sockaddr_in repladdr;
     size_t proto_len;
     // argsThread_t *args = voidPtr;
-    char op_type[MAXLINE + 1];
+    char op_type[MAXLINE + 1], recvchar;
     uint8_t *proto_buf;
 
     strcpy(op_type, "write");
@@ -66,7 +66,8 @@ void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
 
     for(int i = 0; i < chunk->n_replicas; i++)
     {
-        if (chunk->replicas[i]->port == REPLICA_PORT) // SIMPLE HEURISTIC FOR NOW
+        if (chunk->replicas[i]->port == REPLICA_PORT) // SIMPLE HEURISTIC FOR NOW,
+        // should add ip as well
             continue;
         memset(&repladdr, 0, sizeof(repladdr));
         repladdr.sin_family = AF_INET;
@@ -89,6 +90,12 @@ void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
         write_len_and_data(replicafd, proto_len, proto_buf);
 
         write_len_and_data(replicafd, data_len, data);
+
+        // read(replicafd, &msg_len, sizeof(msg_len));
+
+        read(replicafd, &recvchar, 1);
+
+        printf("received acknowledgement of receiving chunk, %c\n", recvchar);
 
         close(replicafd);
     }
@@ -208,6 +215,12 @@ int main(int argc, char **argv)
 
             if (strcmp(operation_type_buff, "write_primary") == 0)
                 forwardChunk(chunk, recvline, buf_len);
+            if (strcmp(operation_type_buff, "write") == 0)
+            {
+                char send_char = 'y';
+                n = write(connfd, &send_char, 1);
+                printf("sent acknowledgement of receiving chunk\n");
+            }
         }
         else
             err_n_die("wrong operation type");
