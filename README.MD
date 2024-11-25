@@ -10,6 +10,20 @@ make
 ./replica/replica
 ./server/server
 ./client/client read ala
+
+
+##############################
+# WRITE
+##############################
+
+cd .. # start in home (distributed-fs)
+# do previous setup
+rm data_replica1/8080/chunks/* && rm data_replica1/8081/chunks/* # to see that (many) replicas write the chunks
+cd build
+./replica/replica 8080
+./replica/replica 8081
+./server/server
+./client/client write komar.txt
    ```
 
 

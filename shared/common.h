@@ -18,12 +18,16 @@
 
 // #define SERVER_PORT 18000
 
-#define MAXLINE 40096
-#define SERVER_PORT 9001
+#define MAXLINE 40096 // ADDITIONAL ZERO?
+#define MASTER_ADDRESS "127.0.0.1"
+#define MASTER_PORT 9001
 #define SA struct sockaddr
+
+#define CHUNK_SIZE 42
 
 void err_n_die(const char *fmt, ...);
 char* bin2hex(const unsigned char *input, size_t len);
 int set_fd_nonblocking(int fd);
+void write_len_and_data(int fd, int len, uint8_t *data);
 
 #endif

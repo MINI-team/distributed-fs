@@ -56,3 +56,11 @@ int set_fd_nonblocking(int fd)
         err_n_die("fcntl error");
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
+
+void write_len_and_data(int fd, int len, uint8_t *data)
+{
+    int net_len = htonl(len);
+
+    write(fd, &net_len, sizeof(net_len));
+    write(fd, data, len);
+}
