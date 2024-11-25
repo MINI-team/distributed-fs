@@ -40,3 +40,10 @@ message FileResponse {
     string filename = 1;
     bytes filedata = 2;
 }
+
+message CommitChunk {
+    bool success = 1;
+    int32 chunk_id = 2;
+    repeated Replica replicas_success = 3;
+    repeated Replica replicas_fail = 4;
+}

@@ -3,7 +3,7 @@
 #include "common.h"
 #include "pthread.h"
 
-const char *SERVER_ADDRESS = "127.0.0.1";
+// const char *MASTER_ADDRESS = "127.0.0.1";
 
 char DEFAULT_PATH[MAXLINE + 1];
 char *OUTPUT_PATH = "output.txt";
@@ -142,9 +142,9 @@ void doRead(int argc, char **argv)
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(SERVER_PORT);
+    servaddr.sin_port = htons(MASTER_PORT);
 
-    if (inet_pton(AF_INET, SERVER_ADDRESS, &servaddr.sin_addr) <= 0)
+    if (inet_pton(AF_INET, MASTER_ADDRESS, &servaddr.sin_addr) <= 0)
         err_n_die("inet_pton error for %s", argv[1]);
 
     if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)

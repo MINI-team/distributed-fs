@@ -19,7 +19,8 @@
 // #define SERVER_PORT 18000
 
 #define MAXLINE 40096 // ADDITIONAL ZERO?
-#define SERVER_PORT 9001
+#define MASTER_ADDRESS "127.0.0.1"
+#define MASTER_PORT 9001
 #define SA struct sockaddr
 
 #define CHUNK_SIZE 42

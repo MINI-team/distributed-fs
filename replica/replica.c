@@ -2,11 +2,32 @@
 #include "dfs.pb-c.h"
 #include "common.h"
 
-const char *SERVER_ADDRESS = "127.0.0.1";
+// const char *SERVER_ADDRESS = "127.0.0.1";
 // #define REPLICA_PORT 8080
 int REPLICA_PORT = 8080;
 
 char *DEFAULT_PATH = "ala.txt";
+
+int connect_with_master()
+{
+    int serverfd;
+    struct sockaddr_in servaddr;
+    /* Connecting with the server */
+    if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(MASTER_PORT);
+
+    if (inet_pton(AF_INET, MASTER_ADDRESS, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error for connecting with master");
+
+    if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
+        err_n_die("connect error");
+    
+    return serverfd;
+}
 
 void readChunkFile(const char *chunkname, int connfd)
 {
@@ -49,8 +70,9 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
     close(fd);
 }
 
-void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
+int forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
 {
+    int success = 1;
     int replicafd, net_len, msg_len;
     struct sockaddr_in repladdr;
     size_t proto_len;
@@ -94,11 +116,15 @@ void *forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
         // read(replicafd, &msg_len, sizeof(msg_len));
 
         read(replicafd, &recvchar, 1);
-
-        printf("received acknowledgement of receiving chunk, %c\n", recvchar);
+        
+        if(recvchar == 'y')
+            printf("received acknowledgement of receiving chunk, %c\n", recvchar);
+        else
+            success = 0;
 
         close(replicafd);
     }
+    return success;
 }
 
 void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
@@ -112,10 +138,12 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *c
 
 int main(int argc, char **argv)
 {
-    int listenfd, connfd, n;
+    int listenfd, connfd, n, res, masterfd;
     struct sockaddr_in servaddr;
     uint8_t operation_type_buff[MAXLINE + 1];
     uint8_t recvline[MAXLINE + 1];
+    uint8_t *proto_buf;
+    size_t proto_len;
 
     if (argc >= 2)
     {
@@ -214,7 +242,26 @@ int main(int argc, char **argv)
             processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
 
             if (strcmp(operation_type_buff, "write_primary") == 0)
-                forwardChunk(chunk, recvline, buf_len);
+            {
+                res = forwardChunk(chunk, recvline, buf_len);
+                CommitChunk commit = COMMIT_CHUNK__INIT;
+                commit.success = res;
+                commit.chunk_id = chunk->chunk_id;
+                
+                if(res)
+                    commit.replicas_success = chunk->replicas;
+                else
+                    commit.replicas_fail = chunk->replicas;
+                
+                msg_len = commit_chunk__get_packed_size(&commit);
+                proto_buf = (uint8_t *)malloc(msg_len * sizeof(uint8_t));
+                commit_chunk__pack(&commit, proto_buf);
+
+                // REPLACE THIS
+                // masterfd = connect_with_master();
+                // write_len_and_data(masterfd, msg_len, proto_buf);
+                // close(masterfd);
+            }
             if (strcmp(operation_type_buff, "write") == 0)
             {
                 char send_char = 'y';
