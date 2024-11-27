@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include "dfs.pb-c.h"
 #include "common.h"
+#include "client.h"
 #include "pthread.h"
-
-const char *SERVER_ADDRESS = "127.0.0.1";
 
 char DEFAULT_PATH[MAXLINE + 1];
 char *OUTPUT_PATH = "output.txt";
@@ -57,6 +56,14 @@ void setupChunks(Chunk **chunks, Replica **replicas)
     chunks[1]->chunk_id = 1;
     chunks[1]->replicas = replicas;
     chunks[1]->n_replicas = 2;
+}
+
+int connection_setup(int *server_socket)
+{
+    struct sockaddr_in servaddr;
+
+    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
 }
 
 void *getChunk(void *voidPtr)
@@ -150,9 +157,14 @@ void doRead(int argc, char **argv)
     if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("connect error");
 
+    printf("tu si nam polaczylo\n");
+    printf("len: %d \n", len);
     /* Sending file request */
-    uint32_t net_len = htonl(len);
+    uint32_t net_len = htonl(len + 1);
     write(serverfd, &net_len, sizeof(net_len));
+    
+    char request_type = 'r';
+    write(serverfd, &request_type, 1);
 
     if (write(serverfd, buffer, len) != len)
         err_n_die("write error");
@@ -258,28 +270,87 @@ void *putChunk(void *voidPtr)
     close(replicafd);
 }
 
-void doWrite()
+void doWrite(char **argv)
 {
-    int n_threads = 2, err, filefd;
+    int n_threads = 2, err, filefd, serverfd;
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
     char path[2 * (MAXLINE + 1)];
-
+    struct sockaddr_in  servaddr;
+    int bytes_read;
     // tutaj przychodza z mastera informacje od replikach i chunach
+
     setupReplicas(replicas);
     setupChunks(chunks, replicas);
 
-    snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
+    snprintf(path, sizeof(path), "data_client/%s", argv[2]);
+    // snprintf(path, sizeof(path), "data_client/%s", DEFAULT_PATH);
 
     printf("opening file %s\n", path);
 
     if ((filefd = open(path, O_RDONLY)) < 0)
         err_n_die("filefd error");
 
+    printf("file size: %d bytes\n", file_size(filefd));
+
+    FileRequestWrite fileRequestWrite = FILE_REQUEST_WRITE__INIT;
+    fileRequestWrite.path = path;
+    fileRequestWrite.size = file_size(filefd);
+
+    int len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite);
+    uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
+    file_request_write__pack(&fileRequestWrite, buffer);
+
+    // if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    //     err_n_die("socket error");
+
+    // memset(&servaddr, 0, sizeof(servaddr));
+    // servaddr.sin_family = AF_INET;
+    // servaddr.sin_port = htons(SERVER_PORT);
+
+    // if (inet_pton(AF_INET, SERVER_ADDRESS, &servaddr.sin_addr) <= 0)
+    //     err_n_die("inet_pton error");
+
+    // if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
+    //     err_n_die("connect error");
+
+    setup_connection(&serverfd);
+        
+    printf("len_fileRequestWrite: %zu \n", len_fileRequestWrite);
+
+    uint32_t net_len_fileRequestWrite_plus1 = htonl(len_fileRequestWrite + 1);
+    write(serverfd, &net_len_fileRequestWrite_plus1, sizeof(net_len_fileRequestWrite_plus1));
+
+    uint8_t request_type = 'w';
+    write(serverfd, &request_type, 1); // this sends fine
+
+    if (write(serverfd, buffer, len_fileRequestWrite) != len_fileRequestWrite) // this sends fine as well
+        err_n_die("write error");
+
+    printf("fileRequestWrite->path: %s\n", fileRequestWrite.path);
+    printf("fileRequestWrite->size: %d\n", fileRequestWrite.size);
+
+    free(buffer);
     // printf("fd is %d\n", filefd);
+
+    uint8_t *buffer2 = (uint8_t *)malloc((MAXLINE+1) * sizeof(uint8_t));
+    if ((bytes_read = read(serverfd, buffer2, MAXLINE)) < 0) // this breaksread error (errno = 14) : Bad address  
+        err_n_die("read error");
+    printf("bytes_read=:%d\n", bytes_read); 
+    ChunkList *chunk_list = chunk_list__unpack(NULL, bytes_read, buffer2);
+    printf("chunk_list->n_chunks: %d\n",chunk_list->n_chunks);
+
+    for (int i = 0; i < chunk_list->n_chunks; i++)
+    {
+        printf("chunk_list->chunks[i]->n_replicas: %d\n",chunk_list->chunks[i]->n_replicas);
+        for (int j = 0; j < chunk_list->chunks[i]->n_replicas; j++)
+        {
+            printf("chunk_list->chunks[i]->replicas[j]->ip: %s\n", chunk_list->chunks[i]->replicas[j]->ip);
+            printf("chunk_list->chunks[i]->replicas[j]->port: %d\n", chunk_list->chunks[i]->replicas[j]->port);
+        }
+    }
 
     for (int i = 0; i < n_threads; i++)
     {
-
         threads[i].chunk_id = i;
         threads[i].path = path;
         // threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
@@ -320,7 +391,20 @@ int main(int argc, char **argv)
     if (strcmp(argv[1], "read") == 0)
         doRead(argc, argv);
     else if (strcmp(argv[1], "write") == 0)
-        doWrite();
+        doWrite(argv);
     else
         err_n_die("usage: wrong client request");
+}
+
+int file_size(int filefd)
+{
+    struct stat file_stat;
+
+    if (fstat(filefd, &file_stat))
+    {
+        close(filefd);
+        err_n_die("fstat error");
+    }
+
+    return (int)file_stat.st_size;
 }

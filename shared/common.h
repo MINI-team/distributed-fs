@@ -20,16 +20,10 @@
 
 #define MAXLINE 40096 // ADDITIONAL ZERO?
 #define SERVER_PORT 9001
+
 #define SA struct sockaddr
 
 #define CHUNK_SIZE 42
-
-typedef struct {
-    int id;
-    char *ip;
-    int32_t port;
-    int stored_chunks;
-} replica_info;
 
 void err_n_die(const char *fmt, ...);
 char* bin2hex(const unsigned char *input, size_t len);

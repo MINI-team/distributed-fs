@@ -8,6 +8,11 @@ message FileRequest {
     int64 size = 3;
 }
 
+message FileRequestWrite {
+    string path = 1;
+    int64 size = 2;
+}
+
 message Replica {
     string name = 1;
     string ip = 2;
@@ -40,3 +45,4 @@ message FileResponse {
     string filename = 1;
     bytes filedata = 2;
 }
+
