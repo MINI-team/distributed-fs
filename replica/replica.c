@@ -20,7 +20,9 @@ int connect_with_master()
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(MASTER_PORT);
 
-    if (inet_pton(AF_INET, MASTER_ADDRESS, &servaddr.sin_addr) <= 0)
+    char* master_ip = resolve_host(MASTER_ADDRESS);
+
+    if (inet_pton(AF_INET, master_ip, &servaddr.sin_addr) <= 0)
         err_n_die("inet_pton error for connecting with master");
 
     if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)

@@ -14,14 +14,17 @@
 
 void setupReplicas(Replica **replicas)
 {
+    char* replica_ip = resolve_host(REPLICA_ADDRESS);
     replicas[0] = (Replica *)malloc(sizeof(Replica));
     replica__init(replicas[0]);
-    replicas[0]->ip = "127.0.0.1";
+    //replicas[0]->ip = "127.0.0.1";
+    replicas[0]->ip = replica_ip;
     replicas[0]->port = 8080;
 
     replicas[1] = (Replica *)malloc(sizeof(Replica));
     replica__init(replicas[1]);
-    replicas[1]->ip = "127.0.0.1";
+    //replicas[1]->ip = "127.0.0.1";
+    replicas[1]->ip = replica_ip;
     replicas[1]->port = 8081;
 }
 
@@ -97,17 +100,25 @@ int main()
 
     event.data.fd = 0;
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, 0, &event) < 0)
-        err_n_die("epoll_ctl error");
+    // if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, 0, &event) < 0){
+    //     printf("error 2\n");
+    //     //perror("epoll_ctl failed");
+    //     err_n_die("epoll_ctl error");
+    // }
+    printf("okay 2\n");
+    fflush(stdout);
 
     while (running) {
         printf("Server polling for events \n");
+        fflush(stdout);
         
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         printf("Ready events: %d \n", event_count);
+        fflush(stdout);
 
         for (int i = 0; i < event_count; i++) {
             printf("Reading file descriptor: %d\n", events[i].data.fd);
+            fflush(stdout);
 
             if (events[i].data.fd == server_socket) 
             {
@@ -131,6 +142,7 @@ int main()
                 FileRequest *fileRequest = file_request__unpack(NULL, len, client_read_buffer);
 
                 printf("fileRequest->path: %s\n", fileRequest->path);
+                fflush(stdout);
                 free(client_read_buffer);
 
                 size_t chunkList_len = chunk_list__get_packed_size(&chunkList);

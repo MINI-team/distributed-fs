@@ -64,3 +64,15 @@ void write_len_and_data(int fd, int len, uint8_t *data)
     write(fd, &net_len, sizeof(net_len));
     write(fd, data, len);
 }
+
+char* resolve_host(char* host_name) {
+    struct hostent *host_entry;
+    static char IPbuffer[INET_ADDRSTRLEN];
+    host_entry = gethostbyname(host_name);
+    if (host_entry == NULL) {
+        fprintf(stderr, "Error: Unable to resolve host %s\n", host_name);
+        return NULL;
+    }
+    strcpy(IPbuffer, inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0])));
+    return IPbuffer;
+}
