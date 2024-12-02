@@ -232,6 +232,51 @@ void   chunk_request__free_unpacked
   assert(message->base.descriptor == &chunk_request__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   write_chunk__init
+                     (WriteChunk         *message)
+{
+  static const WriteChunk init_value = WRITE_CHUNK__INIT;
+  *message = init_value;
+}
+size_t write_chunk__get_packed_size
+                     (const WriteChunk *message)
+{
+  assert(message->base.descriptor == &write_chunk__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t write_chunk__pack
+                     (const WriteChunk *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &write_chunk__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t write_chunk__pack_to_buffer
+                     (const WriteChunk *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &write_chunk__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+WriteChunk *
+       write_chunk__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (WriteChunk *)
+     protobuf_c_message_unpack (&write_chunk__descriptor,
+                                allocator, len, data);
+}
+void   write_chunk__free_unpacked
+                     (WriteChunk *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &write_chunk__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   file_response__init
                      (FileResponse         *message)
 {
@@ -275,6 +320,51 @@ void   file_response__free_unpacked
   if(!message)
     return;
   assert(message->base.descriptor == &file_response__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   commit_chunk__init
+                     (CommitChunk         *message)
+{
+  static const CommitChunk init_value = COMMIT_CHUNK__INIT;
+  *message = init_value;
+}
+size_t commit_chunk__get_packed_size
+                     (const CommitChunk *message)
+{
+  assert(message->base.descriptor == &commit_chunk__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t commit_chunk__pack
+                     (const CommitChunk *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &commit_chunk__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t commit_chunk__pack_to_buffer
+                     (const CommitChunk *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &commit_chunk__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+CommitChunk *
+       commit_chunk__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (CommitChunk *)
+     protobuf_c_message_unpack (&commit_chunk__descriptor,
+                                allocator, len, data);
+}
+void   commit_chunk__free_unpacked
+                     (CommitChunk *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &commit_chunk__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 static const ProtobufCFieldDescriptor file_request__field_descriptors[3] =
@@ -571,6 +661,70 @@ const ProtobufCMessageDescriptor chunk_request__descriptor =
   (ProtobufCMessageInit) chunk_request__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor write_chunk__field_descriptors[3] =
+{
+  {
+    "path",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(WriteChunk, path),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "chunk_id",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(WriteChunk, chunk_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(WriteChunk, n_replicas),
+    offsetof(WriteChunk, replicas),
+    &replica__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned write_chunk__field_indices_by_name[] = {
+  1,   /* field[1] = chunk_id */
+  0,   /* field[0] = path */
+  2,   /* field[2] = replicas */
+};
+static const ProtobufCIntRange write_chunk__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor write_chunk__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "WriteChunk",
+  "WriteChunk",
+  "WriteChunk",
+  "",
+  sizeof(WriteChunk),
+  3,
+  write_chunk__field_descriptors,
+  write_chunk__field_indices_by_name,
+  1,  write_chunk__number_ranges,
+  (ProtobufCMessageInit) write_chunk__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor file_response__field_descriptors[2] =
 {
   {
@@ -620,5 +774,82 @@ const ProtobufCMessageDescriptor file_response__descriptor =
   file_response__field_indices_by_name,
   1,  file_response__number_ranges,
   (ProtobufCMessageInit) file_response__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor commit_chunk__field_descriptors[4] =
+{
+  {
+    "success",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(CommitChunk, success),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "chunk_id",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(CommitChunk, chunk_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas_success",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(CommitChunk, n_replicas_success),
+    offsetof(CommitChunk, replicas_success),
+    &replica__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas_fail",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(CommitChunk, n_replicas_fail),
+    offsetof(CommitChunk, replicas_fail),
+    &replica__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned commit_chunk__field_indices_by_name[] = {
+  1,   /* field[1] = chunk_id */
+  3,   /* field[3] = replicas_fail */
+  2,   /* field[2] = replicas_success */
+  0,   /* field[0] = success */
+};
+static const ProtobufCIntRange commit_chunk__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor commit_chunk__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CommitChunk",
+  "CommitChunk",
+  "CommitChunk",
+  "",
+  sizeof(CommitChunk),
+  4,
+  commit_chunk__field_descriptors,
+  commit_chunk__field_indices_by_name,
+  1,  commit_chunk__number_ranges,
+  (ProtobufCMessageInit) commit_chunk__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

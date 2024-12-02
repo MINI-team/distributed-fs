@@ -1,0 +1,26 @@
+FROM ubuntu:latest
+
+# Update and install required dependencies
+RUN apt-get update && apt-get install -y \
+    protobuf-c-compiler \
+    libprotobuf-c-dev \
+    libglib2.0-dev \
+    cmake \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+
+COPY . /
+
+# Run the setup script and build the project
+RUN bash setup.bash && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make
+
+
+WORKDIR /build/server
+
+# Set the default command to run the server
+CMD ["./server"]
