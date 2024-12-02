@@ -105,8 +105,6 @@ int main()
     //     //perror("epoll_ctl failed");
     //     err_n_die("epoll_ctl error");
     // }
-    printf("okay 2\n");
-    fflush(stdout);
 
     while (running) {
         printf("Server polling for events \n");
