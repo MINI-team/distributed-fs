@@ -1,31 +1,22 @@
-version: '3'
+version: '3.9'
+
 services:
   server_container:
     build:
       context: .
-      dockerfile: Dockerfile.server
-    command: ["sh", "-c","./server"]
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd server && ./server"]
 
   client_container:
     build:
       context: .
-      dockerfile: Dockerfile.client
-    command: ["sh", "-c", "sleep 5; ./client read ala"]
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd client && sleep 3 && ./client read ala"]
     depends_on:
       - server_container
 
   replica_container:
     build:
       context: .
-      dockerfile: Dockerfile.replica
-    command: ["./replica"]
-    # depends_on:
-    #   - server_container
-
-  # replica_2_container:
-  #   build:
-  #     context: ./mock-replica-copy #will work after port deletion
-  #     dockerfile: Dockerfile
-  #   command: ["./mock_replica"]
-  #   depends_on:
-  #     - server_container
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd replica && ./replica"]
