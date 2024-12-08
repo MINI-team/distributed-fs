@@ -2,9 +2,12 @@
 #include <glib.h>
 #include <malloc.h>
 #include <sys/epoll.h>
-
+#include <limits.h>
+#include <string.h>
 #include "common.h"
 #include "dfs.pb-c.h"
+
+#include "server.h"
 
 #define MAX_EVENTS 5
 #define READ_SIZE 1024
@@ -14,37 +17,240 @@
 
 void setupReplicas(Replica **replicas)
 {
-    char* replica_ip = resolve_host(REPLICA_ADDRESS);
+    // char* replica_ip = resolve_host(REPLICA_ADDRESS);
     replicas[0] = (Replica *)malloc(sizeof(Replica));
     replica__init(replicas[0]);
-    //replicas[0]->ip = "127.0.0.1";
-    replicas[0]->ip = replica_ip;
+    replicas[0]->ip = "127.0.0.1";
+    // replicas[0]->ip = replica_ip;
     replicas[0]->port = 8080;
 
     replicas[1] = (Replica *)malloc(sizeof(Replica));
     replica__init(replicas[1]);
-    //replicas[1]->ip = "127.0.0.1";
-    replicas[1]->ip = replica_ip;
+    replicas[1]->ip = "127.0.0.1";
+    // replicas[1]->ip = replica_ip;
     replicas[1]->port = 8081;
+    
+    replicas[2] = (Replica *)malloc(sizeof(Replica));
+    replica__init(replicas[2]);
+    // replicas[2]->ip = "127.0.0.1";
+    replicas[2]->port = 8082;
+}
+void handle_new_connection(int epoll_fd, int server_socket)
+{
+    int client_socket = accept(server_socket, (SA *)NULL, NULL);
+
+    event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!client_event_data)
+        err_n_die("malloc error");
+
+    client_data_t *client_data = (client_data_t *)malloc(sizeof(client_data_t));
+    if (!client_data)
+        err_n_die("malloc error");
+
+    client_data->client_socket = client_socket;
+    client_data->buffer = (char *)malloc(sizeof(char));
+    client_data->payload_size = 0;
+    client_data->bytes_stored = 0;
+    client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE - 1;
+    
+    client_event_data->is_server = 0;
+    client_event_data->client_data = client_data;
+
+    struct epoll_event event;
+    event.events = EPOLLIN;
+    event.data.ptr = client_event_data; 
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
+        err_n_die("epoll_ctl error"); 
+
+    set_fd_nonblocking(client_socket);
+
+    int net_len;
+    int bytes_read = read(client_socket, &net_len, sizeof(int));
+    printf("handle_new_connection, bytes_read: %d\n", bytes_read);
+    if (bytes_read < sizeof(int))
+    {
+        printf("client rejected \n");
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
+            err_n_die("epoll_ctl error");
+        free(client_data->buffer);
+        free(client_data);
+        close(client_socket);
+        return;
+    }
+
+    client_data->payload_size = ntohl(net_len);
+    printf("client configured, declared payload: %d\n", client_data->payload_size);
 }
 
-void setupChunks(Chunk **chunks, Replica **replicas)
+void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *hash_table)
 {
-    chunks[0] = (Chunk *)malloc(sizeof(Chunk));
-    chunk__init(chunks[0]);
-    chunks[0]->chunk_id = 1;
-    chunks[0]->replicas = replicas;
-    chunks[0]->n_replicas = 2;
+    int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
-    chunks[1] = (Chunk *)malloc(sizeof(Chunk));
-    chunk__init(chunks[1]);
-    chunks[1]->chunk_id = 2;
-    chunks[1]->replicas = replicas;
-    chunks[1]->n_replicas = 2;
+    ChunkList *chunk_list = (ChunkList *)malloc(sizeof(ChunkList));
+    chunk_list__init(chunk_list);
+    chunk_list->success = 1;
+    chunk_list->n_chunks = chunks_number;
+    chunk_list->chunks = (Chunk **)malloc(chunks_number * sizeof(Chunk *));
+
+    for (int i = 0; i < chunks_number; i++)
+    {
+        Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
+        chunk__init(chunk);
+        chunk->chunk_id = i;
+        chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
+        strcpy(chunk->path, path);
+        chunk->n_replicas = 3;
+        chunk->replicas = (Replica **)malloc(3 * sizeof(Replica *));
+
+        // Replica *replicas[3];
+        for (int j = 0; j < 3; j++)
+        {
+            
+            Replica *replica = (Replica *)malloc(sizeof(Replica));
+            replica__init(replica);
+            
+            int rand_ind = rand() % REPLICAS_COUNT;
+            // printf("rand_ind: %d \n", rand_ind);
+            replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
+            strcpy(replica->ip, all_replicas[rand_ind]->ip);
+            replica->port = all_replicas[rand_ind]->port;
+            replica->is_primary = (j == 0);
+
+            chunk->replicas[j] = replica;
+        }
+        
+        chunk_list->chunks[i] = chunk;
+    }
+
+    g_hash_table_insert(hash_table, strdup(path), chunk_list);
+}
+
+void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **all_replicas, GHashTable *hash_table)
+{
+    char request_type = event_data->client_data->buffer[0];
+    if (request_type == 'w')
+    {
+        printf("write request detected \n");
+        printf("event_data->client_data->payload_size - 1: %d\n", event_data->client_data->payload_size - 1);
+        printf("halo\n");
+        FileRequestWrite *fileRequestWrite = file_request_write__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        if (!fileRequestWrite)
+            err_n_die("ups");
+        printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
+        printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+        add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
+
+        ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
+        if (chunk_list)
+        {
+            printf("oho i hit client: %d\n", event_data->client_data->client_socket);
+            // int k =  write(event_data->client_data->client_socket, "x", 1);
+            // printf("sent k=:%d\n", k);
+            int chunk_list_len = chunk_list__get_packed_size(chunk_list);
+            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+            uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
+            chunk_list__pack(chunk_list, buffer);
+
+            if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+                err_n_die("write error");
+            printf("server sent the response\n");
+        }
+        else
+        {
+            printf("not found \n");
+        }
+
+        // printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+    }
+    else if (request_type == 'r')
+    {
+        printf("read request detected \n"); 
+        FileRequest *fileRequest = file_request__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        printf("fileRequest->path: %s\n", fileRequest->path);
+        ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequest->path);
+        if (chunk_list)
+        {
+            size_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
+            uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
+            chunk_list__pack(chunk_list, buffer);
+
+            if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+                err_n_die("write error");
+
+        }
+        else
+        {
+            printf("not found \n");
+        }
+    }
+    else
+    {
+        printf("request rejected \n");
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->client_data->client_socket, NULL))
+            err_n_die("epoll_ctl error");
+        close(event_data->client_data->client_socket);
+        free(event_data->client_data->buffer);
+        free(event_data->client_data);
+        free(event_data);
+        return;
+    }
+
+    // FileRequest *fileRequest = file_request__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+    // printf("fileRequest->path: %s\n", fileRequest->path);
+}
+
+void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_replicas, GHashTable *hash_table)
+{
+    int client_socket = event_data->client_data->client_socket;
+
+    printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->client_data->payload_size);
+
+    int bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
+        event_data->client_data->space_left);
+
+    if (bytes_read == 0)
+    {
+        printf("client disconnected \n");
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
+            err_n_die("epoll_ctl error");
+        free(event_data->client_data->buffer);
+        free(event_data->client_data);
+        free(event_data);
+        close(client_socket);
+        return;
+    }
+
+    printf("handle_client, bytes_read: %d\n", bytes_read);
+
+    event_data->client_data->space_left -= bytes_read;
+    event_data->client_data->bytes_stored += bytes_read;
+
+    if (event_data->client_data->bytes_stored == event_data->client_data->payload_size)
+    {
+        process_request(epoll_fd, event_data, all_replicas, hash_table);
+    }
+    else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size)
+    {
+        /*multi-queries clients - TODO*/
+        err_n_die("undefined");
+    }
+    // char test[100];
+    // int bytes_read = read(client_socket, test, 50);
+    // printf("bytes_read: %d\n", bytes_read);
+    // int value;
+    // memcpy(&value, test, 4);
+    // value = ntohl(value);
+    // int value = ntohl(*((int *)test)); 
+
+    // test[bytes_read] = '\0';
+
+    // printf("%d\n", value);  
 }
 
 int main()
 {   
+    srand(time(NULL));
     GHashTable *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
     int                 server_socket, client_socket, n;
     struct sockaddr_in  servaddr;
@@ -54,112 +260,143 @@ int main()
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
 
-    Replica             *replicas[2];
-    int                 replicas_count = 2;
+    replica_info_t      *all_replicas[5]; // these are all replicas master knows
+
+    Replica             *protobuf_replicas[3]; // this an array of replicas we send to the client
+    int                 replicas_count = 3;
 
     Chunk               *chunks[2];
     int                 chunks_count = 2;
 
     ChunkList           chunkList = CHUNK_LIST__INIT;
 
+    /* Variables for the server2.0 */
+    client_data_t       clients[MAX_CLIENTS];
 
-    setupReplicas(replicas);
-    setupChunks(chunks, replicas);    
+    initialize_demo_replicas(all_replicas);
+    // setupReplicas(replicas);
+    // setupChunks(chunks, protobuf_replicas);    
 
-    chunkList.success = 1;
-    chunkList.chunks = chunks;
-    chunkList.n_chunks = chunks_count;
+    // chunkList.success = 1;
+    // chunkList.chunks = chunks;
+    // chunkList.n_chunks = chunks_count;
+
+    server_setup(&server_socket, &epoll_fd, &event);
+
+    add_file("ala", 80, all_replicas, hash_table);
+
+    while (running) {
+        printf("\nServer polling for events \n");
+        
+        int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        printf("Ready events: %d \n", event_count);
+
+        for (int i = 0; i < event_count; i++) {
+            // printf("Reading file descriptor: %d\n", events[i].data.fd);
+
+            event_data_t *event_data = (event_data_t *)events[i].data.ptr;
+
+            if (event_data->is_server)
+            {   
+                printf("server event\n");
+                handle_new_connection(epoll_fd, server_socket);
+            }
+            else
+            {
+                printf("client event\n");
+                handle_client(epoll_fd, event_data, all_replicas, hash_table);
+                // int client_socket = events[i].data.fd;
+                // bytes_read = read(client_socket, clients[client_socket].buffer, SINGLE_CLIENT_BUFFER_SIZE);                
+                
+            }
+        }
+    }
+    close(epoll_fd);
+    close(server_socket);
+}
+
+void initialize_demo_replicas(replica_info_t **all_replicas)
+{
+    for (int i = 0; i < 5; i++) {
+        all_replicas[i] = (replica_info_t *)malloc(sizeof(replica_info_t));
+        all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
+    }
+
+    strcpy(all_replicas[0]->ip, "127.0.0.1");
+    all_replicas[0]->port = 8080;
+
+    strcpy(all_replicas[1]->ip, "127.0.0.1");
+    all_replicas[1]->port = 8081;
+
+    strcpy(all_replicas[2]->ip, "127.0.0.1");
+    all_replicas[2]->port = 8082;
+
+    strcpy(all_replicas[3]->ip, "127.0.0.1");
+    all_replicas[3]->port = 8083;
+
+    strcpy(all_replicas[4]->ip, "127.0.0.1");
+    all_replicas[4]->port = 8084;
+}
 
 
-    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+// void initialize_demo_replicas(replica_info_t **all_replicas)
+// {
+//     all_replicas[0] = (replica_info_t *)malloc(sizeof(replica_info_t));
+//     all_replicas[0]->ip = "127.0.0.1";
+//     all_replicas[0]->port = 8080;
+
+//     all_replicas[1] = (replica_info_t *)malloc(sizeof(replica_info_t));
+//     all_replicas[1]->ip = "127.0.0.1";
+//     all_replicas[1]->port = 8081;
+
+//     all_replicas[2] = (replica_info_t *)malloc(sizeof(replica_info_t));
+//     all_replicas[2]->ip = "127.0.0.1";
+//     all_replicas[2]->port = 8082;
+
+//     all_replicas[3] = (replica_info_t *)malloc(sizeof(replica_info_t));
+//     all_replicas[3]->ip = "127.0.0.1";
+//     all_replicas[3]->port = 8083;
+
+//     all_replicas[4] = (replica_info_t *)malloc(sizeof(replica_info_t));
+//     all_replicas[4]->ip = "127.0.0.1";
+//     all_replicas[4]->port = 8084;
+// }
+
+int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
+{
+    struct sockaddr_in servaddr;
+
+    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
 
     int option = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
+    if (setsockopt(*server_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
         err_n_die("setsockopt error");
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(MASTER_PORT);
+    servaddr.sin_port = htons(MASTER_SERVER_PORT);
 
-    if (bind(server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
+    if (bind(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("bind error");
     
-    if (listen(server_socket, 10) < 0)
+    if (listen(*server_socket, 10) < 0)
         err_n_die("listen error");
     
-    if ((epoll_fd = epoll_create1(0)) < 0)
+    if ((*epoll_fd = epoll_create1(0)) < 0)
         err_n_die("epoll_create1 error");
 
-    event.events = EPOLLIN;
-    event.data.fd = server_socket;
+    event_data_t *server_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!server_event_data)
+        err_n_die("malloc error");
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket, &event) < 0)
+    server_event_data->is_server = 1;
+    server_event_data->server_socket = *server_socket;
+
+    event->events = EPOLLIN;
+    event->data.ptr = server_event_data;
+
+    if (epoll_ctl(*epoll_fd, EPOLL_CTL_ADD, *server_socket, event) < 0)
         err_n_die("epoll_ctl error");
-
-    event.data.fd = 0;
-
-    // if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, 0, &event) < 0){
-    //     printf("error 2\n");
-    //     //perror("epoll_ctl failed");
-    //     err_n_die("epoll_ctl error");
-    // }
-
-    while (running) {
-        printf("Server polling for events \n");
-        fflush(stdout);
-        
-        int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-        printf("Ready events: %d \n", event_count);
-        fflush(stdout);
-
-        for (int i = 0; i < event_count; i++) {
-            printf("Reading file descriptor: %d\n", events[i].data.fd);
-            fflush(stdout);
-
-            if (events[i].data.fd == server_socket) 
-            {
-                client_socket = accept(server_socket, (SA *)NULL, NULL);
-                
-                uint32_t net_len;
-                
-                read(client_socket, &net_len, sizeof(net_len));
-
-                uint32_t len = ntohl(net_len);
-
-                uint8_t *client_read_buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
-                if(!client_read_buffer) {
-                    perror("malloc failed");
-                    close(client_socket);
-                    continue;
-                }
-
-                read(client_socket, client_read_buffer, len);
-
-                FileRequest *fileRequest = file_request__unpack(NULL, len, client_read_buffer);
-
-                printf("fileRequest->path: %s\n", fileRequest->path);
-                fflush(stdout);
-                free(client_read_buffer);
-
-                size_t chunkList_len = chunk_list__get_packed_size(&chunkList);
-                uint8_t *buffer = (uint8_t *)malloc(chunkList_len * sizeof(uint8_t));
-                chunk_list__pack(&chunkList, buffer);
-
-                if (write(client_socket, buffer, chunkList_len) != chunkList_len)
-                    err_n_die("write error");
-
-                close(client_socket);
-            }
-            else if (events[i].data.fd == 0)
-            {
-                running = 0;
-                break;
-            }
-
-        }
-    }
-    close(epoll_fd);
-    close(server_socket);
 }
