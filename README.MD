@@ -4,6 +4,7 @@
 ##############################
 # WRITE && READ DEMO
 ##############################
+sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
 bash setup.bash
 mkdir build build/data_replica1/8080/chunks build/data_replica1/8081/chunks
 cd build
@@ -19,17 +20,6 @@ cd server
 cd client
 ./client write test
 ./client read test
-
-sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
-bash setup.bash
-mkdir build
-cd build
-cmake ..
-make
-./replica/replica
-./server/server
-./client/client read ala
-
 
 ##############################
 # WRITE
