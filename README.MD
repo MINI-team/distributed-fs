@@ -1,6 +1,6 @@
 
 # files for writing need to placed in the build/client, not build/client/data_client !
-
+   ```bash
 ##############################
 # WRITE && READ DEMO
 ##############################
@@ -19,9 +19,7 @@ cd server
 cd client
 ./client write test
 ./client read test
-   ```
 
-   ```bash
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
 bash setup.bash
 mkdir build
@@ -45,7 +43,7 @@ cd build
 ./replica/replica 8081
 ./server/server
 ./client/client write komar.txt
-
+   ```
 
 Chunks data for replica1 is stored in data_replica1/chunks
 
