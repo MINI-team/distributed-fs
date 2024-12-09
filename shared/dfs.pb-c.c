@@ -52,6 +52,51 @@ void   file_request__free_unpacked
   assert(message->base.descriptor == &file_request__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   file_request_write__init
+                     (FileRequestWrite         *message)
+{
+  static const FileRequestWrite init_value = FILE_REQUEST_WRITE__INIT;
+  *message = init_value;
+}
+size_t file_request_write__get_packed_size
+                     (const FileRequestWrite *message)
+{
+  assert(message->base.descriptor == &file_request_write__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t file_request_write__pack
+                     (const FileRequestWrite *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &file_request_write__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t file_request_write__pack_to_buffer
+                     (const FileRequestWrite *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &file_request_write__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+FileRequestWrite *
+       file_request_write__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (FileRequestWrite *)
+     protobuf_c_message_unpack (&file_request_write__descriptor,
+                                allocator, len, data);
+}
+void   file_request_write__free_unpacked
+                     (FileRequestWrite *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &file_request_write__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   replica__init
                      (Replica         *message)
 {
@@ -431,6 +476,57 @@ const ProtobufCMessageDescriptor file_request__descriptor =
   (ProtobufCMessageInit) file_request__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor file_request_write__field_descriptors[2] =
+{
+  {
+    "path",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(FileRequestWrite, path),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "size",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(FileRequestWrite, size),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned file_request_write__field_indices_by_name[] = {
+  0,   /* field[0] = path */
+  1,   /* field[1] = size */
+};
+static const ProtobufCIntRange file_request_write__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor file_request_write__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "FileRequestWrite",
+  "FileRequestWrite",
+  "FileRequestWrite",
+  "",
+  sizeof(FileRequestWrite),
+  2,
+  file_request_write__field_descriptors,
+  file_request_write__field_indices_by_name,
+  1,  file_request_write__number_ranges,
+  (ProtobufCMessageInit) file_request_write__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor replica__field_descriptors[4] =
 {
   {
@@ -508,7 +604,7 @@ const ProtobufCMessageDescriptor replica__descriptor =
   (ProtobufCMessageInit) replica__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor chunk__field_descriptors[2] =
+static const ProtobufCFieldDescriptor chunk__field_descriptors[3] =
 {
   {
     "chunk_id",
@@ -523,8 +619,20 @@ static const ProtobufCFieldDescriptor chunk__field_descriptors[2] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "replicas",
+    "path",
     2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Chunk, path),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "replicas",
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Chunk, n_replicas),
@@ -537,12 +645,13 @@ static const ProtobufCFieldDescriptor chunk__field_descriptors[2] =
 };
 static const unsigned chunk__field_indices_by_name[] = {
   0,   /* field[0] = chunk_id */
-  1,   /* field[1] = replicas */
+  1,   /* field[1] = path */
+  2,   /* field[2] = replicas */
 };
 static const ProtobufCIntRange chunk__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor chunk__descriptor =
 {
@@ -552,7 +661,7 @@ const ProtobufCMessageDescriptor chunk__descriptor =
   "Chunk",
   "",
   sizeof(Chunk),
-  2,
+  3,
   chunk__field_descriptors,
   chunk__field_indices_by_name,
   1,  chunk__number_ranges,

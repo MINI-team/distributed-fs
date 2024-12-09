@@ -18,7 +18,7 @@ int connect_with_master()
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(MASTER_PORT);
+    servaddr.sin_port = htons(MASTER_SERVER_PORT);
 
     char* master_ip = resolve_host(MASTER_ADDRESS);
 
@@ -54,7 +54,7 @@ void readChunkFile(const char *chunkname, int connfd)
 void processRequest(char *path, int id, int connfd)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/chunks/%s%d.chunk", path, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", REPLICA_PORT, path, id);
     printf("chunkname: %s\n", chunkname);
     readChunkFile(chunkname, connfd);
 }
@@ -132,8 +132,8 @@ int forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
 void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%d.chunk", 
-        REPLICA_PORT, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", 
+        REPLICA_PORT, path, id);
     printf("chunkname: %s\n", chunkname);
     writeChunkFile(chunkname, data, length);
 }
@@ -241,7 +241,8 @@ int main(int argc, char **argv)
 
             printf("received chunk:\n%s\n", recvline);
 
-            processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
+            // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
+            processWriteRequest(chunk->path, chunk->chunk_id, recvline, buf_len, chunk);
 
             if (strcmp(operation_type_buff, "write_primary") == 0)
             {
