@@ -67,6 +67,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
 
     int net_len;
     int bytes_read = read(client_socket, &net_len, sizeof(int));
+    // set_fd_nonblocking(client_socket);
     printf("handle_new_connection, bytes_read: %d\n", bytes_read);
     if (bytes_read < sizeof(int))
     {
@@ -110,7 +111,12 @@ void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *h
             Replica *replica = (Replica *)malloc(sizeof(Replica));
             replica__init(replica);
             
-            int rand_ind = rand() % REPLICAS_COUNT;
+            int rand_ind;
+            if (j == 0)
+                rand_ind = 0;
+            else
+                rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
+            
             // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);

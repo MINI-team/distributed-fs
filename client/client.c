@@ -263,12 +263,14 @@ void *putChunk(void *voidPtr)
     write_len_and_data(replicafd, bytes_read, buffer);
 
     close(replicafd);
+
+    printf("sent %s to replica %d\n", buffer, args->port);
 }
 
 void doWrite(char *_path)
 {
-    int n_threads = 2, err, filefd, serverfd;
-    argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * n_threads);
+    // int n_threads = 2, 
+    int err, filefd, serverfd;
     char path[2 * (MAXLINE + 1)];
     struct sockaddr_in  servaddr;
     int bytes_read;
@@ -334,6 +336,8 @@ void doWrite(char *_path)
         }
     }
 
+    argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * chunk_list->n_chunks);
+
     for (int i = 0; i < chunk_list->n_chunks; i++)
     {
         threads[i].chunk_id = i;
@@ -351,7 +355,7 @@ void doWrite(char *_path)
         }
     }
 
-    for (int i = 0; i < n_threads; i++)
+    for (int i = 0; i < chunk_list->n_chunks; i++)
     {
         if ((err = pthread_join(threads[i].tid, NULL)) != 0)
         {

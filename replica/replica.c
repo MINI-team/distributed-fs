@@ -212,7 +212,7 @@ int main(int argc, char **argv)
         }
         else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
         {
-            printf("received write request\n");
+            printf("received %s request\n", operation_type_buff);
             n = read(connfd, &proto_len, sizeof(proto_len));
             proto_len = ntohl(proto_len);
             printf("proto_len: %d\n", proto_len);
