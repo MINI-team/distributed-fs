@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
 COPY . /
 
 RUN bash setup.bash && \
-    mkdir build && \
+    rm -rf build && \
+    mkdir -p build/replica/data_replica1/8080/chunks build/replica/data_replica1/8081/chunks && \
     cd build && \
     cmake .. && \
     make

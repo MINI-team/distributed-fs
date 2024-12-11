@@ -15,7 +15,13 @@ services:
     depends_on:
       - server_container
 
-  replica_container:
+  replica_container_1:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd replica && ./replica"]
+
+  replica_container_2:
     build:
       context: .
       dockerfile: Dockerfile.all
