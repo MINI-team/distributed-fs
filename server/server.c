@@ -328,45 +328,38 @@ void initialize_demo_replicas(replica_info_t **all_replicas)
         all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
     }
 
-    strcpy(all_replicas[0]->ip, "127.0.0.1");
-    all_replicas[0]->port = 8080;
+#ifdef DOCKER
+    strcpy(all_replicas[0]->ip, resolve_host(REPLICA_SERVER_IP_0));
+    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
 
-    strcpy(all_replicas[1]->ip, "127.0.0.1");
-    all_replicas[1]->port = 8081;
+    strcpy(all_replicas[1]->ip, resolve_host(REPLICA_SERVER_IP_1));
+    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
 
-    strcpy(all_replicas[2]->ip, "127.0.0.1");
-    all_replicas[2]->port = 8082;
+    strcpy(all_replicas[2]->ip, resolve_host(REPLICA_SERVER_IP_2));
+    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
 
-    strcpy(all_replicas[3]->ip, "127.0.0.1");
-    all_replicas[3]->port = 8083;
+    strcpy(all_replicas[3]->ip, resolve_host(REPLICA_SERVER_IP_3));
+    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
 
-    strcpy(all_replicas[4]->ip, "127.0.0.1");
-    all_replicas[4]->port = 8084;
+    strcpy(all_replicas[4]->ip, resolve_host(REPLICA_SERVER_IP_4));
+    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
+#else
+    strcpy(all_replicas[0]->ip, REPLICA_SERVER_IP_0);
+    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
+
+    strcpy(all_replicas[1]->ip, REPLICA_SERVER_IP_1);
+    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
+
+    strcpy(all_replicas[2]->ip, REPLICA_SERVER_IP_2);
+    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
+
+    strcpy(all_replicas[3]->ip, REPLICA_SERVER_IP_3);
+    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
+
+    strcpy(all_replicas[4]->ip, REPLICA_SERVER_IP_4);
+    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
+#endif
 }
-
-
-// void initialize_demo_replicas(replica_info_t **all_replicas)
-// {
-//     all_replicas[0] = (replica_info_t *)malloc(sizeof(replica_info_t));
-//     all_replicas[0]->ip = "127.0.0.1";
-//     all_replicas[0]->port = 8080;
-
-//     all_replicas[1] = (replica_info_t *)malloc(sizeof(replica_info_t));
-//     all_replicas[1]->ip = "127.0.0.1";
-//     all_replicas[1]->port = 8081;
-
-//     all_replicas[2] = (replica_info_t *)malloc(sizeof(replica_info_t));
-//     all_replicas[2]->ip = "127.0.0.1";
-//     all_replicas[2]->port = 8082;
-
-//     all_replicas[3] = (replica_info_t *)malloc(sizeof(replica_info_t));
-//     all_replicas[3]->ip = "127.0.0.1";
-//     all_replicas[3]->port = 8083;
-
-//     all_replicas[4] = (replica_info_t *)malloc(sizeof(replica_info_t));
-//     all_replicas[4]->ip = "127.0.0.1";
-//     all_replicas[4]->port = 8084;
-// }
 
 int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
 {

@@ -11,46 +11,23 @@ char DEFAULT_PATH[MAXLINE + 1];
 ChunkList *chunk_list_global;
 
 
-void setupReplicas(Replica **replicas)
-{
-    // char* replica_ip = resolve_host(REPLICA_ADDRESS);
-    replicas[0] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[0]);
-    replicas[0]->ip = "127.0.0.1";
-    // replicas[0]->ip = replica_ip;
-    replicas[0]->port = 8080;
-    replicas[0]->name = "Replica A";
+// void setupReplicas(Replica **replicas)
+// {
+//     // char* replica_ip = resolve_host(REPLICA_ADDRESS);
+//     replicas[0] = (Replica *)malloc(sizeof(Replica));
+//     replica__init(replicas[0]);
+//     replicas[0]->ip = "127.0.0.1";
+//     // replicas[0]->ip = replica_ip;
+//     replicas[0]->port = 8080;
+//     replicas[0]->name = "Replica A";
 
-    replicas[1] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[1]);
-    replicas[1]->ip = "127.0.0.1";
-    // replicas[1]->ip = replica_ip;
-    replicas[1]->port = 8081;
-    replicas[1]->name = "Replica B";
-}
-
-void setupChunks(Chunk **chunks, Replica **replicas)
-{
-    chunks[0] = (Chunk *)malloc(sizeof(Chunk));
-    chunk__init(chunks[0]);
-    chunks[0]->chunk_id = 0;
-    chunks[0]->replicas = replicas;
-    chunks[0]->n_replicas = 2;
-
-    chunks[1] = (Chunk *)malloc(sizeof(Chunk));
-    chunk__init(chunks[1]);
-    chunks[1]->chunk_id = 1;
-    chunks[1]->replicas = replicas;
-    chunks[1]->n_replicas = 2;
-}
-
-int connection_setup(int *server_socket)
-{
-    struct sockaddr_in servaddr;
-
-    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        err_n_die("socket error");
-}
+//     replicas[1] = (Replica *)malloc(sizeof(Replica));
+//     replica__init(replicas[1]);
+//     replicas[1]->ip = "127.0.0.1";
+//     // replicas[1]->ip = replica_ip;
+//     replicas[1]->port = 8081;
+//     replicas[1]->name = "Replica B";
+// }
 
 void *getChunk(void *voidPtr)
 {
@@ -97,9 +74,7 @@ void *getChunk(void *voidPtr)
     printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
 
     if ((pwrite(args->filefd, recvline, n, args->offset)) < 0)
-    {
         err_n_die("pwrite error");
-    }
 
     close(serverfd);
 }
@@ -130,22 +105,9 @@ void doRead(int argc, char **argv)
     file_request__pack(&request, buffer);
 
     /* Connecting with the server */
-    if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        err_n_die("socket error");
+    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
 
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(MASTER_SERVER_PORT);
-
-    // char* master_ip = resolve_host(MASTER_ADDRESS);
-
-    if (inet_pton(AF_INET, MASTER_SERVER_IP, &servaddr.sin_addr) <= 0)
-        err_n_die("inet_pton error for %s", argv[1]);
-
-    if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
-        err_n_die("connect error");
-
-    printf("tu si nam polaczylo\n");
+    printf("tu sie nam polaczylo\n");
     printf("len: %d \n", len);
     /* Sending file request */
     uint32_t net_len = htonl(len + 1);
@@ -234,18 +196,23 @@ void *putChunk(void *voidPtr)
     proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
     chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
 
-    memset(&repladdr, 0, sizeof(repladdr));
-    repladdr.sin_family = AF_INET;
-    repladdr.sin_port = htons(args->port);
+    setup_connection(&replicafd, args->ip, args->port);
 
-    if (inet_pton(AF_INET, args->ip, &repladdr.sin_addr) < 0)
-        err_n_die("inet_pton error for %s", args->ip);
+    // memset(&repladdr, 0, sizeof(repladdr));
+    // repladdr.sin_family = AF_INET;
+    // repladdr.sin_port = htons(args->port);
 
-    if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        err_n_die("socket error");
+    // if (inet_pton(AF_INET, args->ip, &repladdr.sin_addr) < 0)
+    //     err_n_die("inet_pton error for %s", args->ip);
 
-    if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
-        err_n_die("connect error");
+    // if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    //     err_n_die("socket error");
+
+    // if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
+    // {
+    //     printf("IP: %s, Port: %d\n", args->ip, args->port);
+    //     err_n_die("connect error");
+    // }
 
     net_len = htonl(CHUNK_SIZE);
     write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
@@ -269,9 +236,6 @@ void doWrite(char *_path)
     struct sockaddr_in  servaddr;
     int bytes_read;
    
-    // setupReplicas(replicas); // <------------------------------- REPLACE THIS
-    // setupChunks(chunks, replicas); // <------------------------------- REPLACE THIS
-
     // snprintf(path, sizeof(path), "data_client/%s", _path);
     snprintf(path, sizeof(path), "%s", _path);
     // snprintf(path, sizeof(path), "%s", argv[2]);
@@ -292,7 +256,7 @@ void doWrite(char *_path)
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     file_request_write__pack(&fileRequestWrite, buffer);
 
-    setup_connection(&serverfd);
+    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
         
     printf("len_fileRequestWrite: %zu \n", len_fileRequestWrite);
 
