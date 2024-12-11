@@ -7,15 +7,9 @@
 // const char *MASTER_ADDRESS = "127.0.0.1";
 
 char DEFAULT_PATH[MAXLINE + 1];
-char *OUTPUT_PATH = "output.txt";
-
-// Replica *replicas[2]; // has to be chaged 
-// // int replicas_count = 2;
-// Chunk *chunks[2];
 
 ChunkList *chunk_list_global;
 
-#define OFFSET 13
 
 void setupReplicas(Replica **replicas)
 {
@@ -196,7 +190,7 @@ void doRead(int argc, char **argv)
         threads[i].path = DEFAULT_PATH;
         threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
         threads[i].port = chunkList->chunks[i]->replicas[0]->port;
-        threads[i].offset = i * OFFSET;
+        threads[i].offset = i * CHUNK_SIZE;
         threads[i].filefd = filefd;
 
         if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0)
