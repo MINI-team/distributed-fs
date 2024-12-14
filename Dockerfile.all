@@ -15,6 +15,7 @@ RUN bash setup.bash && \
     mkdir -p build/replica/data_replica1/8080/chunks build/replica/data_replica1/8081/chunks && \
     cd build && \
     cmake .. && \
-    make
+    make && \
+    cp ../data_client/alphabet client/alphabet
 
 WORKDIR /build
