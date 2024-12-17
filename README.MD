@@ -6,11 +6,12 @@
 ##############################
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
 bash setup.bash
-mkdir build build/data_replica1/8080/chunks build/data_replica1/8081/chunks
+# mkdir build
+mkdir -p build/replica/data_replica1/8080/chunks build/replica/data_replica1/8081/chunks
 cd build
 cmake ..
 make
-cp client/data_client/test client/
+cp ../data_client/alphabet client/alphabet
 cd replica
 ./replica 8080
 cd replica
