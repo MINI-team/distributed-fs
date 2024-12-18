@@ -144,7 +144,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         if (!fileRequestWrite)
             err_n_die("ups");
         printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
-        printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+        printf("fileRequestWrite->size: %ld\n", fileRequestWrite->size);
         add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
