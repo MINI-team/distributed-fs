@@ -13,7 +13,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.all
-    command: ["sh", "-c", "cd client && sleep 3 && ./client write alphabet && sleep 3 && ./client read alphabet"]
+    # command: ["sh", "-c", "cd client && sleep 3 && ./client write alphabet && sleep 3 && ./client read alphabet"]
+    command: ["sh", "-c", "cd client && sleep 2 && ./client write ala && sleep 3 && ./client read ala"]
     depends_on:
       - server_container
 
@@ -23,7 +24,9 @@ services:
       dockerfile: Dockerfile.all
     # ports:
     #   - "8080:8080"
-    command: ["sh", "-c", "cd replica && ./replica 8080"]
+    # command: ["sh", "-c", "cd replica && ./replica 8080"]
+    command: ["sh", "-c", "(cd replica && ./replica 8080 &) && PID=$! && sleep 1 && kill -9 $PID"]
+    # command: ["sh", "-c", "cd replica && ./replica 8080 && sleep 1 && kill -9 -1"]
 
   replica_container_1:
     build:

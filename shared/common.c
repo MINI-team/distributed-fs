@@ -67,7 +67,7 @@ void write_len_and_data(int fd, int len, uint8_t *data)
 
     // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
     if ((sent = write(fd, data, len)) != len)
-        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
+        err_n_die("writing data didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
 
     // printf("writing to replica OK\nwrote %d(/%d) bytes\n", sent, len);
