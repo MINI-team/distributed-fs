@@ -307,17 +307,6 @@ int main()
     server_setup(&server_socket, &epoll_fd, &event);
 
     add_file("ala", 80, all_replicas, hash_table);
-
-    // Add your server binding details here for printing
-    char ip_str[INET_ADDRSTRLEN]; // Buffer to store human-readable IP
-    socklen_t addr_len = sizeof(servaddr);
-    if (getsockname(server_socket, (struct sockaddr *)&servaddr, &addr_len) == 0) {
-        inet_ntop(AF_INET, &servaddr.sin_addr, ip_str, sizeof(ip_str));
-        int port = ntohs(servaddr.sin_port);
-        printf("Server is polling on address: %s, port: %d\n", ip_str, port);
-    } else {
-        perror("getsockname error");
-    }
     
     while (running) {
         printf("\nServer polling for events \n");
