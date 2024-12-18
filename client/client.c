@@ -55,6 +55,8 @@ void *getChunk(void *voidPtr)
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(args->port);
 
+    printf("?????? IP: %s, Port: %d\n", args->ip, args->port);
+
     if (inet_pton(AF_INET, args->ip, &servaddr.sin_addr) <= 0)
         err_n_die("inet_pton error for %s", args->ip);
 

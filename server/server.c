@@ -69,9 +69,11 @@ void handle_new_connection(int epoll_fd, int server_socket)
     int bytes_read = read(client_socket, &net_len, sizeof(int));
     set_fd_nonblocking(client_socket);
     printf("handle_new_connection, bytes_read: %d\n", bytes_read);
+    fflush(stdout);
     if (bytes_read < sizeof(int))
     {
         printf("client rejected \n");
+        fflush(stdout);
         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
             err_n_die("epoll_ctl error");
         free(client_data->buffer);
@@ -82,6 +84,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
 
     client_data->payload_size = ntohl(net_len);
     printf("client configured, declared payload: %d\n", client_data->payload_size);
+    fflush(stdout);
 }
 
 void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *hash_table)
@@ -138,33 +141,42 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
     if (request_type == 'w')
     {
         printf("write request detected \n");
+        fflush(stdout);
         printf("event_data->client_data->payload_size - 1: %d\n", event_data->client_data->payload_size - 1);
+        fflush(stdout);
         printf("halo\n");
+        fflush(stdout);
         FileRequestWrite *fileRequestWrite = file_request_write__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
         if (!fileRequestWrite)
             err_n_die("ups");
         printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
+        fflush(stdout);
         printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+        fflush(stdout);
         add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
         {
             printf("oho i hit client: %d\n", event_data->client_data->client_socket);
+            fflush(stdout);
             // int k =  write(event_data->client_data->client_socket, "x", 1);
             // printf("sent k=:%d\n", k);
             int chunk_list_len = chunk_list__get_packed_size(chunk_list);
             printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+            fflush(stdout);
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
 
             if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
                 err_n_die("write error");
             printf("server sent the response\n");
+            fflush(stdout);
         }
         else
         {
             printf("not found \n");
+            fflush(stdout);
         }
 
         // printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
@@ -172,8 +184,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
     else if (request_type == 'r')
     {
         printf("read request detected \n"); 
+        fflush(stdout);
         FileRequest *fileRequest = file_request__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
         printf("fileRequest->path: %s\n", fileRequest->path);
+        fflush(stdout);
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequest->path);
         if (chunk_list)
         {
@@ -188,11 +202,13 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         else
         {
             printf("not found \n");
+            fflush(stdout);
         }
     }
     else
     {
         printf("request rejected \n");
+        fflush(stdout);
         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->client_data->client_socket, NULL))
             err_n_die("epoll_ctl error");
         close(event_data->client_data->client_socket);
@@ -211,13 +227,14 @@ void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_r
     int client_socket = event_data->client_data->client_socket;
 
     printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->client_data->payload_size);
-
+    fflush(stdout);
     int bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
         event_data->client_data->space_left);
 
     if (bytes_read == 0)
     {
         printf("client disconnected \n");
+        fflush(stdout);
         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
             err_n_die("epoll_ctl error");
         free(event_data->client_data->buffer);
@@ -228,7 +245,7 @@ void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_r
     }
 
     printf("handle_client, bytes_read: %d\n", bytes_read);
-
+    fflush(stdout);
     event_data->client_data->space_left -= bytes_read;
     event_data->client_data->bytes_stored += bytes_read;
 
@@ -291,11 +308,24 @@ int main()
 
     add_file("ala", 80, all_replicas, hash_table);
 
+    // Add your server binding details here for printing
+    char ip_str[INET_ADDRSTRLEN]; // Buffer to store human-readable IP
+    socklen_t addr_len = sizeof(servaddr);
+    if (getsockname(server_socket, (struct sockaddr *)&servaddr, &addr_len) == 0) {
+        inet_ntop(AF_INET, &servaddr.sin_addr, ip_str, sizeof(ip_str));
+        int port = ntohs(servaddr.sin_port);
+        printf("Server is polling on address: %s, port: %d\n", ip_str, port);
+    } else {
+        perror("getsockname error");
+    }
+    
     while (running) {
         printf("\nServer polling for events \n");
+        fflush(stdout);
         
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         printf("Ready events: %d \n", event_count);
+        fflush(stdout);
 
         for (int i = 0; i < event_count; i++) {
             // printf("Reading file descriptor: %d\n", events[i].data.fd);
@@ -305,11 +335,13 @@ int main()
             if (event_data->is_server)
             {   
                 printf("server event\n");
+                fflush(stdout);
                 handle_new_connection(epoll_fd, server_socket);
             }
             else
             {
                 printf("client event\n");
+                fflush(stdout);
                 handle_client(epoll_fd, event_data, all_replicas, hash_table);
                 // int client_socket = events[i].data.fd;
                 // bytes_read = read(client_socket, clients[client_socket].buffer, SINGLE_CLIENT_BUFFER_SIZE);                
