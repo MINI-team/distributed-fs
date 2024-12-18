@@ -31,6 +31,7 @@
 #define DOCKER
 
 #ifdef DOCKER
+
 #define MASTER_SERVER_IP "server_container"
 #define REPLICA_SERVER_IP_0 "replica_container_0"
 #define REPLICA_SERVER_IP_1 "replica_container_1"
@@ -63,7 +64,7 @@
 #endif
 
 
-#define CHUNK_SIZE 5
+#define CHUNK_SIZE 12
 #define REPLICAS_COUNT 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator

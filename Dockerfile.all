@@ -16,6 +16,6 @@ RUN bash setup.bash && \
     cd build && \
     cmake .. && \
     make && \
-    cp ../data_client/alphabet client/alphabet
+    cp ../data_client/* client
 
 WORKDIR /build
