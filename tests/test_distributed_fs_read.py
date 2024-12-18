@@ -15,7 +15,7 @@ def setup_docker_environment():
     text=True,
     check=True
 )
-    print(result.stdout)
+    #print(result.stdout)
 
     time.sleep(3)
     
@@ -25,15 +25,19 @@ def test_client_output(setup_docker_environment):
     command = "docker compose logs"
     args = shlex.split(command)
     container_logs = subprocess.run(
-        args,
+        # args, # glowacz needs to use this instead of line below
+        ["docker", "logs", "distributed-fs_client_container_1"],
         capture_output=True,
         text=True,
         check=True,
     )
     logs = container_logs.stdout
-
-    assert "n_chunks: 2" in logs, "[ERR] n_chunks != 2 in client output"
-    assert "chunk_id: 0" in logs, "[ERR] No chunk_id 0 in client output"
-    assert "chunk_id: 1" in logs, "[ERR] No chunk_id 1 in client output"
-    # assert "received: Ala ma kota" in logs, "[ERR] No message from chunk 0 in client output"
-    # assert "received: a kot ma Ale" in logs, "[ERR] No message from chunk 1 in client output"
+    print(logs)
+    assert "n_chunks: 6" in logs, "[ERR] n_chunks != 2 in client output"
+    assert "n_replicas: 3" in logs, "[ERR] n_replicas != 3 in client output"
+    assert "sent abcde to replica" in logs, "[ERR] abcde wasn't sent"
+    assert "sent fghij to replica" in logs, "[ERR] fghij wasn't sent"
+    assert "sent klmno to replica" in logs, "[ERR] klmno wasn't sent"
+    assert "sent pqrst to replica" in logs, "[ERR] pqrst wasn't sent"
+    assert "sent uvwxy to replica" in logs, "[ERR] uvwx wasn't sent"
+    assert "sent z to replica" in logs, "[ERR] z wasn't sent"

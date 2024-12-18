@@ -63,11 +63,11 @@ void handle_new_connection(int epoll_fd, int server_socket)
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
         err_n_die("epoll_ctl error"); 
 
-    set_fd_nonblocking(client_socket);
+    // set_fd_nonblocking(client_socket);
 
     int net_len;
     int bytes_read = read(client_socket, &net_len, sizeof(int));
-    // set_fd_nonblocking(client_socket);
+    set_fd_nonblocking(client_socket);
     printf("handle_new_connection, bytes_read: %d\n", bytes_read);
     if (bytes_read < sizeof(int))
     {
