@@ -177,6 +177,8 @@ int main(int argc, char **argv)
     if (listen(listenfd, 10) < 0)
         err_n_die("listen error");
 
+    // clear_socket_buffer(listenfd);
+
     for (;;)
     {
         struct sockaddr_in addr;
@@ -232,12 +234,12 @@ int main(int argc, char **argv)
             printf("chunk->chunk_id: %d\n", chunk->chunk_id);
             printf("chunk->n_replicas: %ld\n", chunk->n_replicas);
 
-            for (int i = 0; i < chunk->n_replicas; i++)
-            {
-                printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
-                       chunk->replicas[i]->name, chunk->replicas[i]->ip,
-                       chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
-            }
+            // for (int i = 0; i < chunk->n_replicas; i++)
+            // {
+            //     printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
+            //            chunk->replicas[i]->name, chunk->replicas[i]->ip,
+            //            chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+            // }
 
             n = read(connfd, &buf_len, sizeof(buf_len));
             buf_len = ntohl(buf_len);
@@ -246,7 +248,7 @@ int main(int argc, char **argv)
             memset(recvline, 0, MAXLINE);
             n = read(connfd, recvline, buf_len);
 
-            printf("received chunk: %s\n", recvline);
+            fflush(stdout); printf("received chunk: %s\n", recvline); fflush(stdout);
 
             // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
             processWriteRequest(chunk->path, chunk->chunk_id, recvline, buf_len, chunk);
