@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  server_container:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    ports:
+      - "9001:9001"
+    command: ["sh", "-c", "cd server && ./server"]
+
+  client_container:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd client && ./client write alphabet"]
