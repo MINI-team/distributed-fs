@@ -18,8 +18,6 @@ def setup_docker_environment():
         text=True,
         check=True
     )
-
-    time.sleep(6)
     
     yield
 

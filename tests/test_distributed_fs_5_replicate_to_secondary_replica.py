@@ -36,11 +36,11 @@ def get_logs(command):
     return logs
 
 def test_client_output(setup_docker_environment):
-    client_logs = get_logs("docker logs distributed-fs-client_container-1")
-    server_logs = get_logs("docker logs distributed-fs-server_container-1")
-    
-    assert "Succesfully connected to 9001" in client_logs, "[ERR] client failed to connect with server"
+    sec_replica_logs = get_logs("docker logs distributed-fs-replica_container_1-1")
 
-    assert "write request detected" in server_logs, "[ERR] write request from client wasn't received by master"
-    assert "fileRequestWrite->path: alphabet" in server_logs, "[ERR] master didn't receive right path"
-    assert "fileRequestWrite->size: 26" in server_logs, "[ERR] master didn't receive right size"
+    assert "received chunk: abcde" in sec_replica_logs, "[ERR] secondary replica didn't receive abcde"
+    assert "received chunk: fghij" in sec_replica_logs, "[ERR] secondary replica didn't receive fghij"
+    assert "received chunk: klmno" in sec_replica_logs, "[ERR] secondary replica didn't receive klmno"
+    assert "received chunk: pqrst" in sec_replica_logs, "[ERR] secondary replica didn't receive pqrst"
+    assert "received chunk: uvwxy" in sec_replica_logs, "[ERR] secondary replica didn't receive uvwxy"
+    assert "received chunk: z" in sec_replica_logs, "[ERR] secondary replica didn't receive z"
