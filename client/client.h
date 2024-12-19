@@ -41,6 +41,7 @@ int setup_connection(int *server_socket, char *ip, uint16_t port)
     if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
 
+    //printf("After socket creation\n");
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(port);
@@ -49,7 +50,7 @@ int setup_connection(int *server_socket, char *ip, uint16_t port)
         err_n_die("inet_pton error");
     
     if ((err = connect(*server_socket, (SA *)&servaddr, sizeof(servaddr))) < 0)
-    if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
+    // if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
     {
         fflush(stdout);
         printf("Unable to connect to IP: %s, Port: %d, trying a different replica...\n", ip, port);

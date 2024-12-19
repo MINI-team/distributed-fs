@@ -31,7 +31,6 @@
 #define DOCKER
 
 #ifdef DOCKER
-
 #define MASTER_SERVER_IP "server_container"
 #define REPLICA_SERVER_IP_0 "replica_container_0"
 #define REPLICA_SERVER_IP_1 "replica_container_1"
@@ -39,6 +38,14 @@
 #define REPLICA_SERVER_IP_3 "replica_container_3"
 #define REPLICA_SERVER_IP_4 "replica_container_4"
 #define CLIENT_IP "client_container"
+
+// #define MASTER_SERVER_IP "localhost"
+// #define REPLICA_SERVER_IP_0 "localhost"
+// #define REPLICA_SERVER_IP_1 "localhost"
+// #define REPLICA_SERVER_IP_2 "localhost"
+// #define REPLICA_SERVER_IP_3 "localhost"
+// #define REPLICA_SERVER_IP_4 "localhost"
+// #define CLIENT_IP "172.17.0.1"
 
 #define MASTER_SERVER_PORT 9001
 #define REPLICA_SERVER_PORT_0 8080

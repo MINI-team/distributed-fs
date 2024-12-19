@@ -162,20 +162,20 @@ void doRead(int argc, char **argv)
     n = read(serverfd, recvline, MAXLINE);
 
     ChunkList *chunkList = chunk_list__unpack(NULL, n, recvline);
-    printf("n_chunks: %zu\n", chunkList->n_chunks);
-    printf("\n");
+    // printf("n_chunks: %zu\n", chunkList->n_chunks);
+    // printf("\n");
 
-    for (int i = 0; i < chunkList->n_chunks; i++)
-    {
-        printf("chunk_id: %d \n", chunkList->chunks[i]->chunk_id);
-        for (int j = 0; j < chunkList->chunks[i]->n_replicas; j++)
-        {
-            printf("replica_name: %s \n", chunkList->chunks[i]->replicas[j]->name);
-            printf("ip: %s \n", chunkList->chunks[i]->replicas[j]->ip);
-            printf("port: %d \n", chunkList->chunks[i]->replicas[j]->port);
-        }
-        printf("\n");
-    }
+    // for (int i = 0; i < chunkList->n_chunks; i++)
+    // {
+    //     printf("chunk_id: %d \n", chunkList->chunks[i]->chunk_id);
+    //     for (int j = 0; j < chunkList->chunks[i]->n_replicas; j++)
+    //     {
+    //         printf("replica_name: %s \n", chunkList->chunks[i]->replicas[j]->name);
+    //         printf("ip: %s \n", chunkList->chunks[i]->replicas[j]->ip);
+    //         printf("port: %d \n", chunkList->chunks[i]->replicas[j]->port);
+    //     }
+    //     printf("\n");
+    // }
 
     close(serverfd);
 
@@ -322,19 +322,19 @@ void doWrite(char *_path)
         err_n_die("read error");
     printf("bytes_read=:%d\n", bytes_read); 
     ChunkList *chunk_list = chunk_list__unpack(NULL, bytes_read, buffer2);
-    printf("chunk_list->n_chunks: %ld\n",chunk_list->n_chunks);
+    //printf("chunk_list->n_chunks: %d\n",chunk_list->n_chunks);
 
     chunk_list_global = chunk_list;
 
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-    {
-        printf("chunk_list->chunks[i]->n_replicas: %ld\n",chunk_list->chunks[i]->n_replicas);
-        for (int j = 0; j < chunk_list->chunks[i]->n_replicas; j++)
-        {
-            printf("chunk_list->chunks[i]->replicas[j]->ip: %s\n", chunk_list->chunks[i]->replicas[j]->ip);
-            printf("chunk_list->chunks[i]->replicas[j]->port: %d\n", chunk_list->chunks[i]->replicas[j]->port);
-        }
-    }
+    // for (int i = 0; i < chunk_list->n_chunks; i++)
+    // {
+    //     printf("chunk_list->chunks[i]->n_replicas: %d\n",chunk_list->chunks[i]->n_replicas);
+    //     for (int j = 0; j < chunk_list->chunks[i]->n_replicas; j++)
+    //     {
+    //         printf("chunk_list->chunks[i]->replicas[j]->ip: %s\n", chunk_list->chunks[i]->replicas[j]->ip);
+    //         printf("chunk_list->chunks[i]->replicas[j]->port: %d\n", chunk_list->chunks[i]->replicas[j]->port);
+    //     }
+    // }
 
     fflush(stdout);
     

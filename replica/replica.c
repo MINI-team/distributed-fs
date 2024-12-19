@@ -107,6 +107,8 @@ int forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
         {
             printf("Unable to connect to another replica (%d), but continuing to work\n",
                 chunk->replicas[i]->port);
+            success = 0;
+            close(replicafd);
             continue;
             // err_n_die("connect error");
         }
@@ -251,6 +253,7 @@ int main(int argc, char **argv)
 
             if (strcmp(operation_type_buff, "write_primary") == 0)
             {
+                // res = 1;
                 res = forwardChunk(chunk, recvline, buf_len);
                 CommitChunk commit = COMMIT_CHUNK__INIT;
                 commit.success = res;
