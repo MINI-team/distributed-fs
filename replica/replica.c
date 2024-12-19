@@ -251,7 +251,8 @@ int main(int argc, char **argv)
 
             if (strcmp(operation_type_buff, "write_primary") == 0)
             {
-                res = 1;//forwardChunk(chunk, recvline, buf_len);
+                // res = 1;
+                res = forwardChunk(chunk, recvline, buf_len);
                 CommitChunk commit = COMMIT_CHUNK__INIT;
                 commit.success = res;
                 commit.chunk_id = chunk->chunk_id;
