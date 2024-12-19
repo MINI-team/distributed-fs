@@ -71,7 +71,7 @@
 #endif
 
 
-#define CHUNK_SIZE 5
+#define CHUNK_SIZE 12
 #define REPLICAS_COUNT 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator

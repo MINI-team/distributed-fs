@@ -104,7 +104,12 @@ int forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
             err_n_die("socket error");
 
         if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
-            err_n_die("connect error");
+        {
+            printf("Unable to connect to another replica (%d), but continuing to work\n",
+                chunk->replicas[i]->port);
+            continue;
+            // err_n_die("connect error");
+        }
 
         net_len = htonl(CHUNK_SIZE);
         write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that

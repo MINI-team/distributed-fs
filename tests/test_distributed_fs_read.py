@@ -3,6 +3,7 @@ import pytest
 import time
 import socket
 from pathlib import Path
+import shlex
 
 @pytest.fixture(scope="module")
 def setup_docker_environment():
@@ -21,11 +22,14 @@ def setup_docker_environment():
     yield
 
 def test_client_output(setup_docker_environment):
+    command = "docker compose logs"
+    args = shlex.split(command)
     container_logs = subprocess.run(
+        # args, # glowacz needs to use this instead of line below
         ["docker", "logs", "distributed-fs_client_container_1"],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
     )
     logs = container_logs.stdout
     print(logs)
