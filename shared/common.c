@@ -85,3 +85,25 @@ char* resolve_host(char* host_name) {
     strcpy(IPbuffer, inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0])));
     return IPbuffer;
 }
+
+void clear_socket_buffer(int socket_fd)
+{
+    int err;
+    char buffer[1024];
+    int bytes_read;
+
+    int flags = fcntl(socket_fd, F_GETFL, 0);
+    
+    set_fd_nonblocking(socket_fd);
+
+    while ((bytes_read = recv(socket_fd, buffer, sizeof(buffer), 0)) > 0)
+    { }
+
+    if ((err = fcntl(socket_fd, F_SETFL, flags)) < 0)
+        err_n_die("fcntl error");
+
+    if (bytes_read == -1 && errno != EWOULDBLOCK && errno != EAGAIN)
+    {
+        perror("recv error");
+    }
+}

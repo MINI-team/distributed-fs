@@ -71,7 +71,7 @@
 #endif
 
 
-#define CHUNK_SIZE 12
+#define CHUNK_SIZE 5
 #define REPLICAS_COUNT 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
@@ -82,5 +82,6 @@ char *bin2hex(const unsigned char *input, size_t len);
 int set_fd_nonblocking(int fd);
 void write_len_and_data(int fd, int len, uint8_t *data);
 char *resolve_host(char *host_name);
+void clear_socket_buffer(int socket_fd);
 
 #endif

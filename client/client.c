@@ -38,8 +38,8 @@ void *getChunk(void *voidPtr)
 
     argsThread_t *args = voidPtr;
     // printf("[tid: %lu] chunk_id: %d\n", pthread_self(), args->chunk_id);
-    printf("chunk_id: %d, ip[0]: %s port[0]: %d, N_REPLICAS: %d\n", 
-        args->chunk_id, args->ip[0], args->port[0], args->n_replicas);
+    // printf("chunk_id: %d, ip[0]: %s port[0]: %d, N_REPLICAS: %d\n", 
+    //     args->chunk_id, args->ip[0], args->port[0], args->n_replicas);
 
     strcpy(op_type, "read");
 
@@ -162,7 +162,8 @@ void doRead(int argc, char **argv)
     n = read(serverfd, recvline, MAXLINE);
 
     ChunkList *chunkList = chunk_list__unpack(NULL, n, recvline);
-    // printf("n_chunks: %zu\n", chunkList->n_chunks);
+    printf("received n_chunks: %zu\n", chunkList->n_chunks);
+    fflush(stdout);
     // printf("\n");
 
     // for (int i = 0; i < chunkList->n_chunks; i++)
@@ -271,7 +272,7 @@ void *putChunk(void *voidPtr)
 
     close(replicafd);
 
-    printf("sent %s to replica %d\n", buffer, args->port[i]);
+    printf("sent %s to replica\n", buffer);
 }
 
 void doWrite(char *_path)
@@ -322,7 +323,7 @@ void doWrite(char *_path)
         err_n_die("read error");
     printf("bytes_read=:%d\n", bytes_read); 
     ChunkList *chunk_list = chunk_list__unpack(NULL, bytes_read, buffer2);
-    //printf("chunk_list->n_chunks: %d\n",chunk_list->n_chunks);
+    printf("write: n_chunks: %d\n",chunk_list->n_chunks);
 
     chunk_list_global = chunk_list;
 

@@ -273,6 +273,7 @@ void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_r
 
 int main()
 {   
+    fflush(stdout); printf("Server start\n"); fflush(stdout);
     srand(time(NULL));
     GHashTable *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
     int                 server_socket, client_socket, n;
@@ -283,7 +284,7 @@ int main()
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
 
-    replica_info_t      *all_replicas[5]; // these are all replicas master knows
+    replica_info_t      *all_replicas[3]; // these are all replicas master knows
 
     Replica             *protobuf_replicas[3]; // this an array of replicas we send to the client
     int                 replicas_count = 3;
@@ -296,6 +297,7 @@ int main()
     /* Variables for the server2.0 */
     client_data_t       clients[MAX_CLIENTS];
 
+    fflush(stdout); printf("Before initializing demo replicas\n"); fflush(stdout);
     initialize_demo_replicas(all_replicas);
     // setupReplicas(replicas);
     // setupChunks(chunks, protobuf_replicas);    
@@ -307,7 +309,7 @@ int main()
     server_setup(&server_socket, &epoll_fd, &event);
 
     add_file("ala", 80, all_replicas, hash_table);
-    
+
     while (running) {
         printf("\nServer polling for events \n");
         fflush(stdout);
@@ -344,7 +346,7 @@ int main()
 
 void initialize_demo_replicas(replica_info_t **all_replicas)
 {
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 3; i++) {
         all_replicas[i] = (replica_info_t *)malloc(sizeof(replica_info_t));
         all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
     }
@@ -359,11 +361,11 @@ void initialize_demo_replicas(replica_info_t **all_replicas)
     strcpy(all_replicas[2]->ip, resolve_host(REPLICA_SERVER_IP_2));
     all_replicas[2]->port = REPLICA_SERVER_PORT_2;
 
-    strcpy(all_replicas[3]->ip, resolve_host(REPLICA_SERVER_IP_3));
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
+    // strcpy(all_replicas[3]->ip, resolve_host(REPLICA_SERVER_IP_3));
+    // all_replicas[3]->port = REPLICA_SERVER_PORT_3;
 
-    strcpy(all_replicas[4]->ip, resolve_host(REPLICA_SERVER_IP_4));
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
+    // strcpy(all_replicas[4]->ip, resolve_host(REPLICA_SERVER_IP_4));
+    // all_replicas[4]->port = REPLICA_SERVER_PORT_4;
 #else
     strcpy(all_replicas[0]->ip, REPLICA_SERVER_IP_0);
     all_replicas[0]->port = REPLICA_SERVER_PORT_0;
@@ -374,12 +376,13 @@ void initialize_demo_replicas(replica_info_t **all_replicas)
     strcpy(all_replicas[2]->ip, REPLICA_SERVER_IP_2);
     all_replicas[2]->port = REPLICA_SERVER_PORT_2;
 
-    strcpy(all_replicas[3]->ip, REPLICA_SERVER_IP_3);
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
+    // strcpy(all_replicas[3]->ip, REPLICA_SERVER_IP_3);
+    // all_replicas[3]->port = REPLICA_SERVER_PORT_3;
 
-    strcpy(all_replicas[4]->ip, REPLICA_SERVER_IP_4);
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
+    // strcpy(all_replicas[4]->ip, REPLICA_SERVER_IP_4);
+    // all_replicas[4]->port = REPLICA_SERVER_PORT_4;
 #endif
+    fflush(stdout); printf("Replica host resolution OK\n"); fflush(stdout); 
 }
 
 int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
