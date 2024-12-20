@@ -1,0 +1,42 @@
+version: '3.9'
+
+services:
+  server_container:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    ports:
+      - "9001:9001"
+    command: ["sh", "-c", "cd server && ./server"]
+
+  client_container:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    command: ["sh", "-c", "cd client && sleep 2 && ./client write alphabet && ./client write ala && sleep 2 && ./client read ala && ./client read alphabet"]
+    depends_on:
+      - server_container
+
+  replica_container_0:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    ports:
+      - "8080:8080"
+    command: ["sh", "-c", "cd replica && ./replica 8080"]
+
+  replica_container_1:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    ports:
+      - "8081:8081"
+    command: ["sh", "-c", "cd replica && ./replica 8081"]
+  
+  replica_container_2:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    ports:
+      - "8082:8082"
+    command: ["sh", "-c", "cd replica && ./replica 8082"]

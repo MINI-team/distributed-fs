@@ -19,7 +19,7 @@ def setup_docker_environment():
         check=True
     )
 
-    time.sleep(30)
+    time.sleep(40)
     
     yield
 
