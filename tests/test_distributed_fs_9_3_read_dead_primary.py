@@ -8,7 +8,7 @@ import shlex
 @pytest.fixture(scope="module")
 def setup_docker_environment():
     script_dir = Path("../")
-    command = "./docker-restart-detached.sh docker-compose-write-dead-primary.yml"
+    command = "./docker-restart-detached.sh docker-compose-read-dead-primary.yml"
     args = shlex.split(command)
 
     result = subprocess.run(
