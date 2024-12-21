@@ -12,6 +12,7 @@
 #define MAX_EVENTS 5
 #define READ_SIZE 1024
 
+#define NUM_OF_REPLICAS 3
 #define MAX_REPLICAS 10
 #define MAX_CHUNKS 10
 
@@ -104,11 +105,11 @@ void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *h
         chunk->chunk_id = i;
         chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
         strcpy(chunk->path, path);
-        chunk->n_replicas = 3;
-        chunk->replicas = (Replica **)malloc(3 * sizeof(Replica *));
+        chunk->n_replicas = NUM_OF_REPLICAS;
+        chunk->replicas = (Replica **)malloc(NUM_OF_REPLICAS * sizeof(Replica *));
 
-        // Replica *replicas[3];
-        for (int j = 0; j < 3; j++)
+        // Replica *replicas[NUM_OF_REPLICAS];
+        for (int j = 0; j < NUM_OF_REPLICAS; j++)
         {
             
             Replica *replica = (Replica *)malloc(sizeof(Replica));
@@ -284,10 +285,10 @@ int main()
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
 
-    replica_info_t      *all_replicas[3]; // these are all replicas master knows
+    replica_info_t      *all_replicas[NUM_OF_REPLICAS]; // these are all replicas master knows
 
-    Replica             *protobuf_replicas[3]; // this an array of replicas we send to the client
-    int                 replicas_count = 3;
+    Replica             *protobuf_replicas[NUM_OF_REPLICAS]; // this an array of replicas we send to the client
+    int                 replicas_count = NUM_OF_REPLICAS;
 
     Chunk               *chunks[2];
     int                 chunks_count = 2;
@@ -346,7 +347,7 @@ int main()
 
 void initialize_demo_replicas(replica_info_t **all_replicas)
 {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < NUM_OF_REPLICAS; i++) {
         all_replicas[i] = (replica_info_t *)malloc(sizeof(replica_info_t));
         all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
     }

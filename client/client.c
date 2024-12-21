@@ -9,7 +9,7 @@
 char DEFAULT_PATH[MAXLINE + 1];
 
 ChunkList *chunk_list_global;
-
+char* master_ip;
 
 // void setupReplicas(Replica **replicas)
 // {
@@ -141,8 +141,11 @@ void doRead(int argc, char **argv)
     file_request__pack(&request, buffer);
 
     /* Connecting with the server */
-    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
 
+    master_ip = strdup(argv[3]);
+    setup_connection(&serverfd, master_ip, MASTER_SERVER_PORT);
+    //setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    
     printf("tu sie nam polaczylo\n");
     printf("len: %ld \n", len);
     /* Sending file request */
@@ -199,7 +202,8 @@ void doRead(int argc, char **argv)
 
         for (int j = 0; j < cur_chunk->n_replicas; j++)
         {
-            threads[i].ip[j] = cur_chunk->replicas[j]->ip;
+            threads[i].ip[j] = master_ip;
+            //threads[i].ip[j] = cur_chunk->replicas[j]->ip;
             threads[i].port[j] = cur_chunk->replicas[j]->port;
         }
 
@@ -275,8 +279,9 @@ void *putChunk(void *voidPtr)
     printf("sent %s to replica\n", buffer);
 }
 
-void doWrite(char *_path)
+void doWrite(char **argv)
 {
+    char *_path = argv[2];
     int err, filefd, serverfd;
     char path[2 * (MAXLINE + 1)];
     struct sockaddr_in  servaddr;
@@ -299,7 +304,9 @@ void doWrite(char *_path)
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     file_request_write__pack(&fileRequestWrite, buffer);
 
-    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    char* master_ip = strdup(argv[3]);
+    setup_connection(&serverfd, master_ip, MASTER_SERVER_PORT);
+    //setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
         
     printf("len_fileRequestWrite: %u \n", len_fileRequestWrite);
 
@@ -360,7 +367,8 @@ void doWrite(char *_path)
 
         for(int j = 0; j < cur_chunk->n_replicas; j++)
         {
-            threads[i].ip[j] = cur_chunk->replicas[j]->ip;
+            //threads[i].ip[j] = cur_chunk->replicas[j]->ip;
+            threads[i].ip[j] = master_ip;
             threads[i].port[j] = cur_chunk->replicas[j]->port;
         }
 
@@ -383,17 +391,19 @@ void doWrite(char *_path)
 
 int main(int argc, char **argv)
 {
-    if (argc != 3)
+    if (argc != 4)
         err_n_die("usage: parameters error");
 
     strcpy(DEFAULT_PATH, argv[2]);
-
     if (strcmp(argv[1], "read") == 0)
         doRead(argc, argv);
     else if (strcmp(argv[1], "write") == 0)
-        doWrite(argv[2]);
+        doWrite(argv);
     else
         err_n_die("usage: wrong client request");
+
+    free(master_ip);
+    return 0;
 }
 
 int file_size(int filefd)

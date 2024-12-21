@@ -29,20 +29,19 @@ int setup_connection(int *server_socket, char *ip, uint16_t port)
     int err;
     struct sockaddr_in servaddr;
 #ifdef DOCKER
-    ip = resolve_host(ip);
-    if(ip == NULL)
-        return -1;
+    // ip = resolve_host(ip);
+    // if(ip == NULL)
+    //     return -1;
 #endif
 
     fflush(stdout);
-    // printf("Trying to connect to IP: %s, Port: %d\n", ip, port);
-    printf("Trying to connect to %d\n", port);
+    printf("Trying to connect to IP: %s, Port: %d\n", ip, port);
+    //printf("Trying to connect to %d\n", port);
     fflush(stdout);
 
     if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
 
-    //printf("After socket creation\n");
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(port);
