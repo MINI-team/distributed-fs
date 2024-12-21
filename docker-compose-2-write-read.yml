@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.all
-    command: ["sh", "-c", "cd client && sleep 2 && ./client write alphabet"]
+    command: ["sh", "-c", "cd client && sleep 2 && ./client write alphabet && ./client write ala && sleep 2 && ./client read ala && ./client read alphabet"]
     depends_on:
       - server_container
 

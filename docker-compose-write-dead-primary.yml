@@ -23,7 +23,7 @@ services:
       dockerfile: Dockerfile.all
     ports:
       - "8080:8080"
-    command: ["sh", "-c", "cd replica && ./replica 8080"]
+    command: ["sh", "-c", "(cd replica && ./replica 8080 &) && PID=$! && sleep 1 && kill -9 $PID"]
 
   replica_container_1:
     build:

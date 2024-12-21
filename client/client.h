@@ -35,7 +35,8 @@ int setup_connection(int *server_socket, char *ip, uint16_t port)
 #endif
 
     fflush(stdout);
-    printf("Trying to connect to IP: %s, Port: %d\n", ip, port);
+    // printf("Trying to connect to IP: %s, Port: %d\n", ip, port);
+    printf("Trying to connect to %d\n", port);
     fflush(stdout);
 
     if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -53,13 +54,15 @@ int setup_connection(int *server_socket, char *ip, uint16_t port)
     // if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
     {
         fflush(stdout);
-        printf("Unable to connect to IP: %s, Port: %d, trying a different replica...\n", ip, port);
+        // printf("Unable to connect to IP: %s, Port: %d, trying a different replica...\n", ip, port);
+        printf("Unable to connect to %d, trying a different replica...\n", port);
         // err_n_die("connect error");
         fflush(stdout);
         return err;
     }
 
-    printf("Succesfully connected to IP: %s, Port: %d\n", ip, port);
+    // printf("Succesfully connected to IP: %s, Port: %d\n", ip, port);
+    printf("Succesfully connected to %d\n", port);
 
     return 0;
 }
