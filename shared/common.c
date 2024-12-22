@@ -74,7 +74,7 @@ void write_len_and_data(int fd, int len, uint8_t *data)
     // err = write(fd, data, len);
 }
 
-char* resolve_host(char* host_name) {
+char *resolve_host(char *host_name) {
     struct hostent *host_entry;
     static char IPbuffer[INET_ADDRSTRLEN];
     host_entry = gethostbyname(host_name);

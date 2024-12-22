@@ -9,11 +9,7 @@
 
 #include "server.h"
 
-#define MAX_EVENTS 5
-#define READ_SIZE 1024
-
-#define MAX_REPLICAS 10
-#define MAX_CHUNKS 10
+#define MAX_EVENTS 10
 
 void setupReplicas(Replica **replicas)
 {
@@ -36,8 +32,14 @@ void setupReplicas(Replica **replicas)
     replicas[2]->port = 8082;
 }
 void handle_new_connection(int epoll_fd, int server_socket)
-{
-    int client_socket = accept(server_socket, (SA *)NULL, NULL);
+{   
+    int client_socket;
+    printf("New client connected\n");
+    if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
+    {
+        printf("Server couldnt accept client\n");
+        return;
+    }
 
     event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!client_event_data)
@@ -48,10 +50,11 @@ void handle_new_connection(int epoll_fd, int server_socket)
         err_n_die("malloc error");
 
     client_data->client_socket = client_socket;
-    client_data->buffer = (char *)malloc(sizeof(char));
+    client_data->buffer = (char *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(char));
     client_data->payload_size = 0;
     client_data->bytes_stored = 0;
-    client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE - 1;
+    client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
+    client_data->reading_started = false;
     
     client_event_data->is_server = 0;
     client_event_data->client_data = client_data;
@@ -63,25 +66,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
         err_n_die("epoll_ctl error"); 
 
-    // set_fd_nonblocking(client_socket);
-
-    int net_len;
-    int bytes_read = read(client_socket, &net_len, sizeof(int));
     set_fd_nonblocking(client_socket);
-    printf("handle_new_connection, bytes_read: %d\n", bytes_read);
-    if (bytes_read < sizeof(int))
-    {
-        printf("client rejected \n");
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
-            err_n_die("epoll_ctl error");
-        free(client_data->buffer);
-        free(client_data);
-        close(client_socket);
-        return;
-    }
-
-    client_data->payload_size = ntohl(net_len);
-    printf("client configured, declared payload: %d\n", client_data->payload_size);
 }
 
 void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *hash_table)
@@ -206,24 +191,80 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
     // printf("fileRequest->path: %s\n", fileRequest->path);
 }
 
-void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_replicas, GHashTable *hash_table)
+void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket)
+{
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
+        err_n_die("epoll_ctl error");
+
+    free(event_data->client_data->buffer);
+    free(event_data->client_data);
+    free(event_data);
+    close(client_socket);
+}
+
+void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
 {
     int client_socket = event_data->client_data->client_socket;
+    int bytes_read;
+    int32_t network_payload_size;
+    
+    bytes_read = read(client_socket, &network_payload_size, sizeof(network_payload_size));
+    printf("handle_new_client_payload_declaration, bytes_read: %d\n", bytes_read);
+    if (bytes_read < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            printf("EAGAIN/EWOULDBLOK\n");
+            return;
+        }
+        err_n_die("read error");
+    }
+    if (bytes_read < sizeof(network_payload_size))
+    {
+        /*
+            Disconnect the client if the payload size cannot be fully read
+            Typically, a zero-byte read indicates the client has disconnected
+        */
+        printf("Client disconnected or sent incomplete payload size\n");
+        disconnect_client(epoll_fd, event_data, client_socket);
+        return;
+    }
+
+    /* At this point we know we have a new client who declared their payload */
+    event_data->client_data->reading_started = true;
+    event_data->client_data->payload_size = ntohl(network_payload_size);
+    
+    if (event_data->client_data->payload_size <= 0 ||
+        event_data->client_data->payload_size > SINGLE_CLIENT_BUFFER_SIZE)
+    {
+        printf("Client declared invalid payload size\n");
+        disconnect_client(epoll_fd, event_data, client_socket);
+        return;
+    }
+
+    printf("Client configured, declared payload size: %d bytes\n", event_data->client_data->payload_size);
+}
+
+void handle_client(int epoll_fd, event_data_t *event_data, replica_info_t **all_replicas, GHashTable *hash_table)
+{
+    int client_socket = event_data->client_data->client_socket;
+    int bytes_read;
+
+    if (event_data->client_data->reading_started == false)
+    {
+        handle_new_client_payload_declaration(epoll_fd, event_data);
+        return;
+    }
 
     printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->client_data->payload_size);
 
-    int bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
+    bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
         event_data->client_data->space_left);
 
     if (bytes_read == 0)
     {
-        printf("client disconnected \n");
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
-            err_n_die("epoll_ctl error");
-        free(event_data->client_data->buffer);
-        free(event_data->client_data);
-        free(event_data);
-        close(client_socket);
+        printf("Client disconnected \n");
+        disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }
 
@@ -233,73 +274,35 @@ void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_r
     event_data->client_data->bytes_stored += bytes_read;
 
     if (event_data->client_data->bytes_stored == event_data->client_data->payload_size)
-    {
         process_request(epoll_fd, event_data, all_replicas, hash_table);
-    }
-    else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size)
-    {
-        /*multi-queries clients - TODO*/
+    else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size)    /*multi-queries clients - TODO*/
         err_n_die("undefined");
-    }
-    // char test[100];
-    // int bytes_read = read(client_socket, test, 50);
-    // printf("bytes_read: %d\n", bytes_read);
-    // int value;
-    // memcpy(&value, test, 4);
-    // value = ntohl(value);
-    // int value = ntohl(*((int *)test)); 
-
-    // test[bytes_read] = '\0';
-
-    // printf("%d\n", value);  
 }
 
 int main()
 {   
     srand(time(NULL));
-    GHashTable *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
-    int                 server_socket, client_socket, n;
-    struct sockaddr_in  servaddr;
-    size_t              bytes_read;
-    uint8_t             read_buffer[READ_SIZE + 1];        
-
+    GHashTable          *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
+    int                 server_socket;
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
-
     replica_info_t      *all_replicas[5]; // these are all replicas master knows
 
-    Replica             *protobuf_replicas[3]; // this an array of replicas we send to the client
-    int                 replicas_count = 3;
-
-    Chunk               *chunks[2];
-    int                 chunks_count = 2;
-
-    ChunkList           chunkList = CHUNK_LIST__INIT;
-
-    /* Variables for the server2.0 */
-    client_data_t       clients[MAX_CLIENTS];
 
     initialize_demo_replicas(all_replicas);
-    // setupReplicas(replicas);
-    // setupChunks(chunks, protobuf_replicas);    
-
-    // chunkList.success = 1;
-    // chunkList.chunks = chunks;
-    // chunkList.n_chunks = chunks_count;
-
     server_setup(&server_socket, &epoll_fd, &event);
 
-    add_file("ala", 80, all_replicas, hash_table);
+    // add_file("ala", 80, all_replicas, hash_table);
 
-    while (running) {
-        printf("\nServer polling for events \n");
+    while (running) 
+    {
+        printf("\n Server polling for events \n");
         
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         printf("Ready events: %d \n", event_count);
 
-        for (int i = 0; i < event_count; i++) {
-            // printf("Reading file descriptor: %d\n", events[i].data.fd);
-
+        for (int i = 0; i < event_count; i++) 
+        {
             event_data_t *event_data = (event_data_t *)events[i].data.ptr;
 
             if (event_data->is_server)
@@ -310,10 +313,7 @@ int main()
             else
             {
                 printf("client event\n");
-                handle_client(epoll_fd, event_data, all_replicas, hash_table);
-                // int client_socket = events[i].data.fd;
-                // bytes_read = read(client_socket, clients[client_socket].buffer, SINGLE_CLIENT_BUFFER_SIZE);                
-                
+                handle_client(epoll_fd, event_data, all_replicas, hash_table);                
             }
         }
     }
@@ -382,6 +382,8 @@ int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
     
     if (listen(*server_socket, 10) < 0)
         err_n_die("listen error");
+
+    set_fd_nonblocking(*server_socket);
     
     if ((*epoll_fd = epoll_create1(0)) < 0)
         err_n_die("epoll_create1 error");
