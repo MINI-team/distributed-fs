@@ -1,4 +1,4 @@
-# NOT READY
+# THIS TEST DOEN'T WORK BUT MANUALLY IT WORKS :/
 import subprocess
 import pytest
 import time
@@ -20,7 +20,7 @@ def setup_docker_environment():
         check=True
     )
 
-    time.sleep(40)
+    time.sleep(6)
     
     yield
 
@@ -68,8 +68,10 @@ def execute_client_command():
 
 def test_client_output(setup_docker_environment):
     kill_replica_container()
-    time.sleep(8)
+    time.sleep(20)
     client_logs = execute_client_command()
+
+    first_replica_logs = get_logs("docker logs distributed-fs-replica_container_0-1")
     sec_replica_logs = get_logs("docker logs distributed-fs-replica_container_1-1")
     
     assert "Unable to connect to 8080, trying a different replica..." in client_logs, "[ERR] no problem connecting to primary replica, wrong test?"

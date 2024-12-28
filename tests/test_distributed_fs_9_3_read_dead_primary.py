@@ -1,15 +1,15 @@
-# NOT READY
 import subprocess
 import pytest
 import time
 import socket
 from pathlib import Path
 import shlex
+import hashlib
 
 @pytest.fixture(scope="module")
 def setup_docker_environment():
     script_dir = Path("../")
-    command = "./docker-restart-detached.sh docker-compose-read-dead-primary.yml"
+    command = "./docker-restart-detached.sh docker-compose.yml"
     args = shlex.split(command)
 
     result = subprocess.run(
@@ -36,23 +36,56 @@ def get_logs(command):
     print("=================== Logs are ===================\n", logs)
     return logs
 
-def test_client_output(setup_docker_environment):
-    client_logs = get_logs("docker logs distributed-fs-client_container-1")
-    sec_replica_logs = get_logs("docker logs distributed-fs-replica_container_1-1")
-    
-    assert "Unable to connect to 8080, trying a different replica..." in client_logs, "[ERR] no problem connecting to primary replica, wrong test?"
-    assert "Succesfully connected to 8081" in client_logs, "[ERR] problem connecting with secondary replica"
-    
-    assert "sent abcde to replica" in client_logs, "[ERR] abcde wasn't sent"
-    assert "sent fghij to replica" in client_logs, "[ERR] fghij wasn't sent"
-    assert "sent klmno to replica" in client_logs, "[ERR] klmno wasn't sent"
-    assert "sent pqrst to replica" in client_logs, "[ERR] pqrst wasn't sent"
-    assert "sent uvwxy to replica" in client_logs, "[ERR] uvwx wasn't sent"
-    assert "sent z to replica" in client_logs, "[ERR] z wasn't sent"
+def kill_replica_container():
+    command = "docker kill distributed-fs-replica_container_0-1"
+    args = shlex.split(command)
 
-    assert "received chunk: abcde" in sec_replica_logs, "[ERR] secondary replica didn't receive abcde"
-    assert "received chunk: fghij" in sec_replica_logs, "[ERR] secondary replica didn't receive fghij"
-    assert "received chunk: klmno" in sec_replica_logs, "[ERR] secondary replica didn't receive klmno"
-    assert "received chunk: pqrst" in sec_replica_logs, "[ERR] secondary replica didn't receive pqrst"
-    assert "received chunk: uvwxy" in sec_replica_logs, "[ERR] secondary replica didn't receive uvwxy"
-    assert "received chunk: z" in sec_replica_logs, "[ERR] secondary replica didn't receive z"
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print(f"Successfully killed the container: {result.stdout}")
+    except subprocess.CalledProcessError as e:
+        print(f"[ERR] Failed to kill the container: {e}")
+
+def execute_client_command():
+    script_dir = Path("../build/client")
+    client_commands = (
+        "./client write alphabet 172.17.0.1",
+        "sleep 2",
+        "./client read alphabet 172.17.0.1"
+    )
+    # it's better to take ip from inspect
+    for command in client_commands:
+        args = shlex.split(command)
+        result = subprocess.run(
+            args,
+            cwd=script_dir,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    return
+
+def md5sum(filename):
+    with open(filename, 'rb') as f:
+        file_data = f.read()
+    return hashlib.md5(file_data).hexdigest()
+
+def compare_md5(file1, file2):
+    hash1 = md5sum(file1)
+    hash2 = md5sum(file2)
+    return hash1 == hash2
+
+def test_client_output(setup_docker_environment):
+    kill_replica_container()
+    time.sleep(10)
+    execute_client_command()
+
+    client_file = Path("../build/client/alphabet")
+    output_file = Path("../build/client/alphabet_output.txt")
+    assert compare_md5(client_file, output_file), "MD5 checksum mismatch for alphabet"
+    

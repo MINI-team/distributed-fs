@@ -4,6 +4,7 @@ import time
 import socket
 from pathlib import Path
 import shlex
+import hashlib
 
 @pytest.fixture(scope="module")
 def setup_docker_environment():
@@ -31,7 +32,6 @@ def execute_client_command():
         "./client read alphabet 172.17.0.1"
     )
     # it's better to take ip from inspect
-    logs = []
     for command in client_commands:
         args = shlex.split(command)
         result = subprocess.run(
@@ -41,16 +41,20 @@ def execute_client_command():
             text=True,
             check=True
         )
-        logs.append(result.stdout)
-    return "\n".join(logs)
+    return
 
+def md5sum(filename):
+    with open(filename, 'rb') as f:
+        file_data = f.read()
+    return hashlib.md5(file_data).hexdigest()
+
+def compare_md5(file1, file2):
+    hash1 = md5sum(file1)
+    hash2 = md5sum(file2)
+    return hash1 == hash2
 
 def test_client_output(setup_docker_environment):
-    client_logs = execute_client_command()
-
-    assert "received: abcde" in client_logs, "[ERR] client didn't receive abcde"
-    assert "received: fghij" in client_logs, "[ERR] client didn't receive fghij"
-    assert "received: klmno" in client_logs, "[ERR] client didn't receive klmno"
-    assert "received: pqrst" in client_logs, "[ERR] client didn't receive pqrst"
-    assert "received: uvwxy" in client_logs, "[ERR] client didn't receive uvwxy"
-    assert "received: z" in client_logs, "[ERR] client didn't receive z"
+    execute_client_command()
+    client_file = Path("../build/client/alphabet")
+    output_file = Path("../build/client/alphabet_output.txt")
+    assert compare_md5(client_file, output_file), "MD5 checksum mismatch for alphabet"
