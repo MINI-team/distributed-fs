@@ -1,6 +1,16 @@
 
 # files for writing need to placed in the build/client, not build/client/data_client !
    ```bash
+You have to run docker on your laptop firstly
+##############################
+# DOCKER 
+##############################
+#
+./docker-restart.sh docker-compose.yml
+cd build/client
+./client write ala 172.17.0.1
+./client read ala 172.17.0.1
+
 ##############################
 # WRITE && READ DEMO
 ##############################
