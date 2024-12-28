@@ -129,7 +129,10 @@ void doRead(int argc, char **argv)
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
-    if ((filefd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+    char output_path[256];
+    snprintf(output_path, sizeof(output_path), "%s_output.txt", argv[2]);
+
+    if ((filefd = open(output_path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
     FileRequest request = FILE_REQUEST__INIT;
