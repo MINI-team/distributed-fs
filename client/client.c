@@ -4,16 +4,15 @@
 #include "client.h"
 #include "pthread.h"
 
-char DEFAULT_PATH[MAXLINE + 1];
-
 ChunkList *chunk_list_global;
 char* master_ip;
 
 void *getChunk(void *voidPtr)
 {
-    int replicafd, n;
+    int replicafd, bytes_read;
     struct sockaddr_in servaddr;
-    char recvline[MAXLINE], op_type[MAXLINE];
+    char chunk[CHUNK_SIZE+1];
+    char op_type[MAXLINE];
     int i, err = -1;
 
     argsThread_t *args = voidPtr;
@@ -48,22 +47,24 @@ void *getChunk(void *voidPtr)
 
     free(buffer);
 
-    memset(recvline, 0, MAXLINE);
-    n = read(replicafd, recvline, MAXLINE);
-    // printf("[tid: %lu] received: %s\n", pthread_self(), recvline);
-    printf("received: %s\n", recvline);
+    /* Receiving chunk data */
+    memset(chunk, 0, CHUNK_SIZE+1);
+    if ((bytes_read = read(replicafd, chunk, CHUNK_SIZE)) < 0)
+        err_n_die("read error");
+    chunk[bytes_read] = '\0';
+
+    printf("[tid: %lu] bytes_read: %d, received: %s\n", pthread_self(), bytes_read, chunk);
     fflush(stdout);
 
-    if ((pwrite(args->filefd, recvline, n, args->offset)) < 0)
+    if ((pwrite(args->filefd, chunk, bytes_read, args->offset)) < 0)
         err_n_die("pwrite error");
 
     close(replicafd);
 }
 
-void setFileRequest(int arc, char **arv, FileRequest *request)
+void setFileRequest(FileRequest *request, char *path)
 {
-    // request->path = "test.txt";
-    request->path = DEFAULT_PATH;
+    request->path = path;
     request->offset = 0;
     request->size = 0;
 }
@@ -103,21 +104,21 @@ void setFileRequest(int arc, char **arv, FileRequest *request)
 //     }
 // }
 
-void doRead(int argc, char **argv)
+void doRead(char *path, char *server_ip)
 {
     int                 serverfd, filefd, n, err;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
-    char output_path[256];
-    snprintf(output_path, sizeof(output_path), "%s_output.txt", argv[2]);
+    char output_path[PATH_LENGTH];
+    snprintf(output_path, sizeof(output_path), "%s_output.txt", path);
 
     if ((filefd = open(output_path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
     FileRequest request = FILE_REQUEST__INIT;
 
-    setFileRequest(argc, argv, &request);
+    setFileRequest(&request, path);
 
     size_t len = file_request__get_packed_size(&request);
     uint8_t *buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
@@ -125,7 +126,7 @@ void doRead(int argc, char **argv)
 
     /* Connecting with the server */
 
-    master_ip = strdup(argv[3]);
+    master_ip = strdup(server_ip);
     setup_connection(&serverfd, master_ip, MASTER_SERVER_PORT);
     //setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
     
@@ -175,7 +176,7 @@ void doRead(int argc, char **argv)
     {
         Chunk *cur_chunk = chunkList->chunks[i];
         threads[i].chunk_id = chunkList->chunks[i]->chunk_id;
-        threads[i].path = DEFAULT_PATH;
+        threads[i].path = path;
         threads[i].offset = i * CHUNK_SIZE;
         threads[i].filefd = filefd;
 
@@ -262,11 +263,10 @@ void *putChunk(void *voidPtr)
     printf("sent %s to replica\n", buffer);
 }
 
-void doWrite(char **argv)
+void doWrite(char *_path, char *server_ip)
 {
-    char *_path = argv[2];
     int err, filefd, serverfd;
-    char path[2 * (MAXLINE + 1)];
+    char path[PATH_LENGTH];
     struct sockaddr_in  servaddr;
     int bytes_read;
    
@@ -287,7 +287,7 @@ void doWrite(char **argv)
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     file_request_write__pack(&fileRequestWrite, buffer);
 
-    char* master_ip = strdup(argv[3]);
+    char* master_ip = strdup(server_ip);
     setup_connection(&serverfd, master_ip, MASTER_SERVER_PORT);
     //setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
         
@@ -377,11 +377,10 @@ int main(int argc, char **argv)
     if (argc != 4)
         err_n_die("usage: parameters error");
 
-    strcpy(DEFAULT_PATH, argv[2]);
     if (strcmp(argv[1], "read") == 0)
-        doRead(argc, argv);
+        doRead(argv[2], argv[3]);
     else if (strcmp(argv[1], "write") == 0)
-        doWrite(argv);
+        doWrite(argv[2], argv[3]);
     else
         err_n_die("usage: wrong client request");
 

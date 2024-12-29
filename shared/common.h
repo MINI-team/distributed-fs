@@ -15,9 +15,11 @@
 #include <sys/time.h>
 #include <sys/ioctl.h>
 #include <netdb.h>
+#include <stdbool.h>
 
 // #define SERVER_PORT 18000
 
+#define PATH_LENGTH 256
 #define MAXLINE 40096 // ADDITIONAL ZERO?
 #define MAX_FILENAME_LENGTH 20 // to be deleted
 //#define MASTER_ADDRESS "127.0.0.1"
