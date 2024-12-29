@@ -1,6 +1,8 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include "common.h"
+
 #define MAX_CLIENTS 10
 #define SINGLE_CLIENT_BUFFER_SIZE 2000
 
@@ -10,6 +12,7 @@ typedef struct {
     int payload_size;
     int bytes_stored;
     int space_left;
+    bool reading_started;
 } client_data_t;
 
 /* This struct we keep for every descriptor that will multiplexed with epoll */
