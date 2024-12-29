@@ -4,30 +4,10 @@
 #include "client.h"
 #include "pthread.h"
 
-// const char *MASTER_ADDRESS = "127.0.0.1";
-
 char DEFAULT_PATH[MAXLINE + 1];
 
 ChunkList *chunk_list_global;
 char* master_ip;
-
-// void setupReplicas(Replica **replicas)
-// {
-//     // char* replica_ip = resolve_host(REPLICA_ADDRESS);
-//     replicas[0] = (Replica *)malloc(sizeof(Replica));
-//     replica__init(replicas[0]);
-//     replicas[0]->ip = "127.0.0.1";
-//     // replicas[0]->ip = replica_ip;
-//     replicas[0]->port = 8080;
-//     replicas[0]->name = "Replica A";
-
-//     replicas[1] = (Replica *)malloc(sizeof(Replica));
-//     replica__init(replicas[1]);
-//     replicas[1]->ip = "127.0.0.1";
-//     // replicas[1]->ip = replica_ip;
-//     replicas[1]->port = 8081;
-//     replicas[1]->name = "Replica B";
-// }
 
 void *getChunk(void *voidPtr)
 {
