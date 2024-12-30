@@ -110,12 +110,17 @@ void doRead(char *path, char *server_ip)
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
-    char output_path[PATH_LENGTH];
-    snprintf(output_path, sizeof(output_path), "%s_output.txt", path);
+    size_t output_path_length = strlen(path) + strlen("_output.txt") + 1; 
+    char *output_path = (char *)malloc(output_path_length * sizeof(char));
+    if (output_path == NULL) {
+        err_n_die("Memory allocation error for output_path\n");
+    }
+    snprintf(output_path, output_path_length, "%s_output.txt", path);
 
     if ((filefd = open(output_path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
+    free(output_path);
     FileRequest request = FILE_REQUEST__INIT;
 
     setFileRequest(&request, path);
@@ -266,11 +271,17 @@ void *putChunk(void *voidPtr)
 void doWrite(char *_path, char *server_ip)
 {
     int err, filefd, serverfd;
-    char path[PATH_LENGTH];
+    //char path[PATH_LENGTH];
     struct sockaddr_in  servaddr;
     int bytes_read;
    
-    snprintf(path, sizeof(path), "%s", _path);
+    size_t path_length = strlen(_path) + 1;
+    char *path = (char *)malloc(path_length * sizeof(char));
+    if (path == NULL) {
+        err_n_die("Memory allocation error for path\n");
+    }
+
+    snprintf(path, path_length, "%s", _path);
 
     printf("opening file: %s\n", path);
 
@@ -313,7 +324,7 @@ void doWrite(char *_path, char *server_ip)
         err_n_die("read error");
     printf("bytes_read=:%d\n", bytes_read); 
     ChunkList *chunk_list = chunk_list__unpack(NULL, bytes_read, buffer2);
-    printf("write: n_chunks: %d\n",chunk_list->n_chunks);
+    printf("write: n_chunks: %ld\n",chunk_list->n_chunks);
 
     chunk_list_global = chunk_list;
 
@@ -370,6 +381,7 @@ void doWrite(char *_path, char *server_ip)
     }
 
     free(threads);
+    free(path);
 }
 
 int main(int argc, char **argv)

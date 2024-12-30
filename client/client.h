@@ -4,9 +4,6 @@
 #include "common.h"
 #include <sys/stat.h>
 
-char *OUTPUT_PATH = "output.txt";
-#define OFFSET 13
-
 typedef struct argsThread
 {
     pthread_t tid;

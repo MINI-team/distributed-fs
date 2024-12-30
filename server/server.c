@@ -9,33 +9,32 @@
 #include "server.h"
 
 #define MAX_EVENTS 10
-
 #define NUM_OF_REPLICAS 3
+#define SINGLE_CLIENT_BUFFER_SIZE 2000
+#define IP_LENGTH 16 // 15 + 1 for a null terminator
 
-// #define READ_SIZE 1024
-// #define MAX_REPLICAS 10
-// #define MAX_CHUNKS 10
+// void setupReplicas(Replica **replicas)
+// {
+//     // char* replica_ip = resolve_host(REPLICA_ADDRESS);
+//     replicas[0] = (Replica *)malloc(sizeof(Replica));
+//     replica__init(replicas[0]);
+//     replicas[0]->ip = "127.0.0.1";
+//     // replicas[0]->ip = replica_ip;
+//     replicas[0]->port = 8080;
 
-void setupReplicas(Replica **replicas)
-{
-    // char* replica_ip = resolve_host(REPLICA_ADDRESS);
-    replicas[0] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[0]);
-    replicas[0]->ip = "127.0.0.1";
-    // replicas[0]->ip = replica_ip;
-    replicas[0]->port = 8080;
-
-    replicas[1] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[1]);
-    replicas[1]->ip = "127.0.0.1";
-    // replicas[1]->ip = replica_ip;
-    replicas[1]->port = 8081;
+//     replicas[1] = (Replica *)malloc(sizeof(Replica));
+//     replica__init(replicas[1]);
+//     replicas[1]->ip = "127.0.0.1";
+//     // replicas[1]->ip = replica_ip;
+//     replicas[1]->port = 8081;
     
-    replicas[2] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[2]);
-    // replicas[2]->ip = "127.0.0.1";
-    replicas[2]->port = 8082;
-}
+//     replicas[2] = (Replica *)malloc(sizeof(Replica));
+//     replica__init(replicas[2]);
+//     // replicas[2]->ip = "127.0.0.1";
+//     replicas[2]->port = 8082;
+// }
+
+
 void handle_new_connection(int epoll_fd, int server_socket)
 {
     int client_socket;
@@ -91,7 +90,11 @@ void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *h
         Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
         chunk__init(chunk);
         chunk->chunk_id = i;
-        chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
+        
+        chunk->path = (char *)malloc((strlen(path) + 1) * sizeof(char));
+        if (chunk->path == NULL) {
+            err_n_die("Memory allocation error for chunk->path\n");
+        }
         strcpy(chunk->path, path);
         chunk->n_replicas = NUM_OF_REPLICAS;
         chunk->replicas = (Replica **)malloc(NUM_OF_REPLICAS * sizeof(Replica *));
@@ -107,7 +110,7 @@ void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *h
             if (j == 0)
                 rand_ind = 0;
             else
-                rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
+                rand_ind = rand() % (NUM_OF_REPLICAS - 1) + 1;
             
             // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
@@ -140,7 +143,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             err_n_die("ups");
         printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
         fflush(stdout);
-        printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+        printf("fileRequestWrite->size: %ld\n", fileRequestWrite->size);
         fflush(stdout);
         add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
 
@@ -322,7 +325,7 @@ int main()
 
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
-    replica_info_t      *all_replicas[5]; // these are all replicas master knows
+    replica_info_t      *all_replicas[NUM_OF_REPLICAS]; // these are all replicas master knows
 
 
     initialize_demo_replicas(all_replicas);

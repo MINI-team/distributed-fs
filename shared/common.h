@@ -19,9 +19,10 @@
 
 // #define SERVER_PORT 18000
 
-#define PATH_LENGTH 256
+#define CHUNK_SIZE 5
+//#define REPLICAS_COUNT 2
+#define SA struct sockaddr
 #define MAXLINE 40096 // ADDITIONAL ZERO?
-#define MAX_FILENAME_LENGTH 20 // to be deleted
 //#define MASTER_ADDRESS "127.0.0.1"
 // #define MASTER_ADDRESS "server_container"
 // #define REPLICA_ADDRESS "replica_container"
@@ -73,11 +74,6 @@
 #endif
 
 
-#define CHUNK_SIZE 5
-#define REPLICAS_COUNT 2
-
-#define IP_LENGTH 16 // 15 + 1 for a null terminator
-#define SA struct sockaddr
 
 void err_n_die(const char *fmt, ...);
 char *bin2hex(const unsigned char *input, size_t len);

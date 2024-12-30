@@ -3,9 +3,6 @@
 
 #include "common.h"
 
-#define MAX_CLIENTS 10
-#define SINGLE_CLIENT_BUFFER_SIZE 2000
-
 typedef struct {
     int client_socket;
     char *buffer;
