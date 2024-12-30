@@ -209,7 +209,11 @@ void doRead(char *path, char *server_ip)
             err_n_die("couldn't join thread");
         }
     }
-
+    for (int i = 0; i < chunkList->n_chunks; i++)
+    {
+        free(threads[i].ip);
+        free(threads[i].port);
+    }
     free(threads);
 }
 
@@ -379,7 +383,11 @@ void doWrite(char *_path, char *server_ip)
             err_n_die("couldn't join thread");
         }
     }
-
+    for (int i = 0; i < chunk_list->n_chunks; i++)
+    {
+        free(threads[i].ip);
+        free(threads[i].port);
+    }
     free(threads);
     free(path);
 }

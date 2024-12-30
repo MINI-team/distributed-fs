@@ -6,8 +6,6 @@
 // #define REPLICA_PORT 8080
 int REPLICA_PORT = 8080;
 
-char *DEFAULT_PATH = "ala.txt";
-
 int connect_with_master()
 {
     int serverfd;
