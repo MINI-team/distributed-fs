@@ -7,7 +7,7 @@
 
 typedef struct {
     int client_socket;
-    char *buffer;
+    uint8_t *buffer;
     int payload_size;
     int bytes_stored;
     int space_left;
@@ -34,7 +34,7 @@ typedef struct {
 
 /* Server setup */
 void initialize_demo_replicas(replica_info_t **all_replicas);
-int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event);
+void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event);
 
 /* New clients */
 void handle_new_connection(int epoll_fd, int server_socket);

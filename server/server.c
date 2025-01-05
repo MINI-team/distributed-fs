@@ -50,7 +50,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
         err_n_die("malloc error");
 
     client_data->client_socket = client_socket;
-    client_data->buffer = (char *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(char));
+    client_data->buffer = (uint8_t *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(uint8_t));
     client_data->payload_size = 0;
     client_data->bytes_stored = 0;
     client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
@@ -72,6 +72,8 @@ void handle_new_connection(int epoll_fd, int server_socket)
 void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
+
+    printf("add_file, chunks_number=%d\n", chunks_number);
 
     ChunkList *chunk_list = (ChunkList *)malloc(sizeof(ChunkList));
     chunk_list__init(chunk_list);
@@ -97,10 +99,11 @@ void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *h
             replica__init(replica);
             
             int rand_ind;
-            if (j == 0)
-                rand_ind = 0;
-            else
-                rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
+            rand_ind = 0;
+            // if (j == 0)
+            //     rand_ind = 0;
+            // else
+            //     rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
             
             // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
@@ -125,11 +128,15 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         printf("write request detected \n");
         printf("event_data->client_data->payload_size - 1: %d\n", event_data->client_data->payload_size - 1);
         printf("halo\n");
-        FileRequestWrite *fileRequestWrite = file_request_write__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        FileRequestWrite *fileRequestWrite = file_request_write__unpack(
+            NULL, 
+            event_data->client_data->payload_size - 1, 
+            event_data->client_data->buffer + 1
+        );
         if (!fileRequestWrite)
             err_n_die("ups");
         printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
-        printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
+        printf("fileRequestWrite->size: %ld\n", fileRequestWrite->size);
         add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
@@ -138,10 +145,16 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             printf("oho i hit client: %d\n", event_data->client_data->client_socket);
             // int k =  write(event_data->client_data->client_socket, "x", 1);
             // printf("sent k=:%d\n", k);
-            int chunk_list_len = chunk_list__get_packed_size(chunk_list);
-            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+            int32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
+            printf("i will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
+        
+            int32_t net_chunk_list_len = ntohl(chunk_list_len);
+            if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
+                err_n_die("write error");
+
+            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
 
             if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
                 err_n_die("write error");
@@ -361,7 +374,7 @@ void initialize_demo_replicas(replica_info_t **all_replicas)
 #endif
 }
 
-int server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
+void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
 {
     struct sockaddr_in servaddr;
 

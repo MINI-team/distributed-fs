@@ -6,3 +6,5 @@ __pycache__
 *pb2.py
 cscope.out
 data_replica1
+big_data
+.vscode

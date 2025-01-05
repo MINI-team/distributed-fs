@@ -4,8 +4,8 @@
 #include "common.h"
 #include <sys/stat.h>
 
-char *OUTPUT_PATH = "output.txt";
-#define OFFSET 13
+#define OUTPUT_PATH "output.txt"
+#define CLIENT_DEBUG_PATH "client.log"
 
 typedef struct argsThread
 {

@@ -57,7 +57,7 @@ int set_fd_nonblocking(int fd)
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void write_len_and_data(int fd, int len, uint8_t *data)
+void write_len_and_data(int fd, uint32_t len, uint8_t *data)
 {
     int net_len = htonl(len), sent;
 
@@ -84,4 +84,12 @@ char *resolve_host(char *host_name) {
     }
     strcpy(IPbuffer, inet_ntoa(*((struct in_addr*)host_entry->h_addr_list[0])));
     return IPbuffer;
+}
+
+void debug_log(FILE *debugfd, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(debugfd, fmt, ap);
+    va_end(ap);
 }
