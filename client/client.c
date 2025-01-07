@@ -5,6 +5,7 @@
 #include "pthread.h"
 
 FILE * debugfd;
+char* received_chunk_path = "test";
 
 ChunkList *chunk_list_global;
 
@@ -29,8 +30,31 @@ int32_t read_payload_size(int serverfd)
     return ntohl(net_payload);
 }
 
+void writeChunkFile(const char *filepat, uint8_t *data, int length)
+{
+    int fd, n;
+
+    if ((fd = open(filepat, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
+        err_n_die("filefd error");
+
+    if ((n = write(fd, data, length)) == -1)
+        err_n_die("read error");
+
+    close(fd);
+}
+
+void debug_chunk_write(char *path, int id, uint8_t *data, int length)
+{
+    char chunkname[MAXLINE + 1];
+    snprintf(chunkname, sizeof(chunkname), "received_chunks/%s%d.chunk", 
+        path, id);
+    // printf("chunkname: %s\n", chunkname);
+    writeChunkFile(chunkname, data, length);
+}
+
 void *getChunk(void *voidPtr)
 {
+    printf("halo\n");
     int serverfd, bytes_read;
     struct sockaddr_in servaddr;
     char chunk[CHUNK_SIZE+1];
@@ -73,107 +97,162 @@ void *getChunk(void *voidPtr)
     /* Receiving chunk data */
     memset(chunk, 0, CHUNK_SIZE+1);
     if ((bytes_read = read(serverfd, chunk, CHUNK_SIZE)) < 0)
-        err_n_die("read error");
+        err_n_die("getChunk read error for args->index: %d\n", args->chunk_id);
+    if (bytes_read != CHUNK_SIZE) // doesnt even heave to !!!!!!!!!!!!!!!!!!!!111
+    {
+        printf("MESSED UP for args->chunk_id: %d, bytes_read: %d, CHUNK_SIZE: %d\n", args->chunk_id, bytes_read, CHUNK_SIZE);
+    }
+
     chunk[bytes_read] = '\0';
 
-    printf("[tid: %lu] bytes_read: %d, received: %s\n", pthread_self(), bytes_read, chunk);
+    // printf("[tid: %lu] bytes_read: %d, received: %s\n", pthread_self(), bytes_read, chunk);
 
     if ((pwrite(args->filefd, chunk, bytes_read, args->offset)) < 0)
         err_n_die("pwrite error");
 
+    debug_chunk_write(received_chunk_path, args->chunk_id, chunk, bytes_read);
+
+    printf("should be saved\n");
+
     close(serverfd);
 }
 
-void setFileRequest(FileRequest *request, char *path)
+void do_read(char *path)
 {
-    request->path = path;
-    request->offset = 0;
-    request->size = 0;
-}
-
-void doRead(char *path)
-{
-    int                 serverfd, filefd, n, err;
+    int                 serverfd, filefd, n, err, bytes_read;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
 
     if ((filefd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
-    FileRequest request = FILE_REQUEST__INIT;
+    FileRequestRead fileRequestRead = FILE_REQUEST_READ__INIT;
+    fileRequestRead.path = path;
 
-    setFileRequest(&request, path);
+    /* Packing protbuf object and 'r' into the buffer */
+    uint32_t len_fileRequestRead = file_request_read__get_packed_size(&fileRequestRead) + 1;
+    uint8_t *buffer = (uint8_t *)malloc(len_fileRequestRead * sizeof(uint8_t));
+    buffer[0] = 'r';
+    file_request_read__pack(&fileRequestRead, buffer + 1);
 
-    uint32_t len = file_request__get_packed_size(&request);
-    uint8_t *buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
-    file_request__pack(&request, buffer);
-
-    /* Connecting with the server */
     setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
 
-    printf("tu sie nam polaczylo\n");
-    printf("len: %d \n", len);
-    /* Sending file request */
-    uint32_t net_len = htonl(len + 1);
-    write(serverfd, &net_len, sizeof(net_len));
-    
-    char request_type = 'r';
-    write(serverfd, &request_type, 1);
+    write_len_and_data(serverfd, len_fileRequestRead, buffer);
 
-    if (write(serverfd, buffer, len) != len)
-        err_n_die("write error");
+    // printf("tu sie nam polaczylo\n");
+    // printf("len: %d \n", len_fileRequestRead);
+
+    // /* Sending file request */
+    // uint32_t net_len = htonl(len + 1);
+    // write(serverfd, &net_len, sizeof(net_len));
+    
+    // char request_type = 'r';
+    // write(serverfd, &request_type, 1);
+
+    // if (write(serverfd, buffer, len) != len)
+    //     err_n_die("write error");
 
     free(buffer);
 
-    /* Receiving ChunkList from the Master */
-    memset(recvline, 0, sizeof(recvline));
-    n = read(serverfd, recvline, MAXLINE);
 
-    printf("n: %d !!\n\n", n);
+    int32_t total_bytes_read = 0;
+    int32_t payload = read_payload_size(serverfd);
+    buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
 
-    ChunkList *chunkList = chunk_list__unpack(NULL, n, recvline);
-    printf("n_chunks: %zu\n", chunkList->n_chunks);
-    printf("\n");
-
-    for (int i = 0; i < chunkList->n_chunks; i++)
+    while (total_bytes_read < payload)
     {
-        printf("chunk_id: %d \n", chunkList->chunks[i]->chunk_id);
-        for (int j = 0; j < chunkList->chunks[i]->n_replicas; j++)
-        {
-            printf("replica_name: %s \n", chunkList->chunks[i]->replicas[j]->name);
-            printf("ip: %s \n", chunkList->chunks[i]->replicas[j]->ip);
-            printf("port: %d \n", chunkList->chunks[i]->replicas[j]->port);
-        }
-        printf("\n");
+        if ((bytes_read = read(serverfd, buffer + total_bytes_read, payload)) < 0)
+            err_n_die("read error");
+        total_bytes_read += bytes_read;
     }
+
+    /* Receiving ChunkList from the Master */
+    // memset(recvline, 0, sizeof(recvline));
+    // n = read(serverfd, recvline, MAXLINE);
+
+    // printf("n: %d !!\n\n", n);
+
+    ChunkList *chunkList = chunk_list__unpack(NULL, payload, buffer);
+    if (!chunkList)
+        err_n_die("chunk_list is null");
+
+    // printf("n_chunks: %zu\n", chunkList->n_chunks);
+    // printf("\n");
+
+    // for (int i = 0; i < chunkList->n_chunks; i++)
+    // {
+    //     printf("chunk_id: %d \n", chunkList->chunks[i]->chunk_id);
+    //     for (int j = 0; j < chunkList->chunks[i]->n_replicas; j++)
+    //     {
+    //         printf("replica_name: %s \n", chunkList->chunks[i]->replicas[j]->name);
+    //         printf("ip: %s \n", chunkList->chunks[i]->replicas[j]->ip);
+    //         printf("port: %d \n", chunkList->chunks[i]->replicas[j]->port);
+    //     }
+    //     printf("\n");
+    // }
 
     close(serverfd);
 
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * chunkList->n_chunks);
 
-    for (int i = 0; i < chunkList->n_chunks; i++)
+
+    int index = 0;
+    bool work = true;
+    int to_join = MAX_THREADS_COUNT;
+
+    while(work)
     {
-
-        threads[i].chunk_id = chunkList->chunks[i]->chunk_id;
-        threads[i].path = path;
-        threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
-        threads[i].port = chunkList->chunks[i]->replicas[0]->port;
-        threads[i].offset = i * CHUNK_SIZE;
-        threads[i].filefd = filefd;
-
-        if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0)
+        for (int i = 0; i < MAX_THREADS_COUNT; i++)
         {
-            err_n_die("couldn't create thread");
+            printf("submiting index: %d\n", index);
+            threads[i].chunk_id = index;
+            threads[i].path = path;
+            threads[i].ip = chunkList->chunks[index]->replicas[0]->ip;
+            threads[i].port = chunkList->chunks[index]->replicas[0]->port;
+            threads[i].offset = index * CHUNK_SIZE;
+            threads[i].filefd = filefd;
+
+            if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0)
+                err_n_die("couldn't create thread");
+            
+            if(++index == chunkList->n_chunks)
+            {
+                work = false;
+                to_join = i + 1;
+                break;
+            }
         }
+
+        printf("joinuje\n");
+        for (int i = 0; i < to_join; i++)
+            if ((err = pthread_join(threads[i].tid, NULL)) != 0)
+                err_n_die("couldn't join thread");
+        printf("skonczylem\n");
     }
 
-    for (int i = 0; i < chunkList->n_chunks; i++)
-    {
-        if ((err = pthread_join(threads[i].tid, NULL)) != 0)
-        {
-            err_n_die("couldn't join thread");
-        }
-    }
+    // for (int i = 0; i < chunkList->n_chunks; i++)
+    // {
+
+    //     threads[i].chunk_id = chunkList->chunks[i]->chunk_id;
+    //     threads[i].path = path;
+    //     threads[i].ip = chunkList->chunks[i]->replicas[0]->ip;
+    //     threads[i].port = chunkList->chunks[i]->replicas[0]->port;
+    //     threads[i].offset = i * CHUNK_SIZE;
+    //     threads[i].filefd = filefd;
+
+    //     if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0)
+    //     {
+    //         err_n_die("couldn't create thread");
+    //     }
+    // }
+
+    // for (int i = 0; i < chunkList->n_chunks; i++)
+    // {
+    //     if ((err = pthread_join(threads[i].tid, NULL)) != 0)
+    //     {
+    //         err_n_die("couldn't join thread");
+    //     }
+    // }
 
     free(threads);
 }
@@ -189,12 +268,12 @@ void *putChunk(void *voidPtr)
     uint8_t *proto_buf;
 
     if ((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
-        err_n_die("read error");
+        err_n_die("putChunk read error");
 
     buffer[bytes_read] = '\0';
 
     // printf("read from file %s:\n%s\n", args->path, buffer);
-    printf("%s\n", buffer);
+    // printf("%s\n", buffer);
 
     strcpy(op_type, "write_primary");
 
@@ -216,7 +295,7 @@ void *putChunk(void *voidPtr)
 
     close(replicafd);
 
-    printf("sent %s to replica %d\n", buffer, args->port);
+    // printf("sent %s to replica %d\n", buffer, args->port);
 }
 
 void do_write(char *path)
@@ -233,8 +312,9 @@ void do_write(char *path)
     fileRequestWrite.path = path;
     fileRequestWrite.size = file_size(filefd);
 
+    /* Packing protbuf object and 'w' into the buffer */
     uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + 1;
-    uint8_t *buffer = (uint8_t *)malloc((len_fileRequestWrite) * sizeof(uint8_t));
+    uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     buffer[0] = 'w';
     file_request_write__pack(&fileRequestWrite, buffer + 1);
 
@@ -250,7 +330,7 @@ void do_write(char *path)
     int32_t payload = read_payload_size(serverfd);
     printf("payload received: %d \n", payload);
     buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
-    
+
     while (total_bytes_read < payload)
     {
         if ((bytes_read = read(serverfd, buffer + total_bytes_read, payload)) < 0)
@@ -267,6 +347,8 @@ void do_write(char *path)
 
     chunk_list_global = chunk_list;
 
+    // possibly close serverfd??
+
 #ifdef DEBUG
     debug_log(debugfd, "chunk_list->n_chunks: %d\n", chunk_list->n_chunks);
     for (int i = 0; i < chunk_list->n_chunks; i++)
@@ -282,22 +364,41 @@ void do_write(char *path)
 
     argsThread_t *threads = (argsThread_t *)malloc(sizeof(argsThread_t) * chunk_list->n_chunks);
 
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-    {
-        threads[i].chunk_id = i;
-        threads[i].path = path;
-        threads[i].ip = chunk_list->chunks[i]->replicas[0]->ip;
-        threads[i].port = chunk_list->chunks[i]->replicas[0]->port;
-        threads[i].offset = i * CHUNK_SIZE;
-        threads[i].filefd = filefd;
+    int index = 0;
+    bool work = true;
+    int to_join = MAX_THREADS_COUNT;
 
-        if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0)
-            err_n_die("couldn't create thread");
+    while(work)
+    {
+        for (int i = 0; i < MAX_THREADS_COUNT; i++)
+        {
+            printf("submiting index: %d\n", index);
+            threads[i].chunk_id = index;
+            threads[i].path = path;
+            threads[i].ip = chunk_list->chunks[index]->replicas[0]->ip;
+            threads[i].port = chunk_list->chunks[index]->replicas[0]->port;
+            threads[i].offset = index * CHUNK_SIZE;
+            threads[i].filefd = filefd;
+
+            if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0)
+                err_n_die("couldn't create thread");
+            
+            if(++index == chunk_list->n_chunks)
+            {
+                work = false;
+                to_join = i + 1;
+                break;
+            }
+        }
+
+        for (int i = 0; i < to_join; i++)
+            if ((err = pthread_join(threads[i].tid, NULL)) != 0)
+                err_n_die("couldn't join thread");
     }
 
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-        if ((err = pthread_join(threads[i].tid, NULL)) != 0)
-            err_n_die("couldn't join thread");
+    // for (int i = 0; i < chunk_list->n_chunks; i++)
+    //     if ((err = pthread_join(threads[i].tid, NULL)) != 0)
+    //         err_n_die("couldn't join thread");
 
     free(threads);
 }
@@ -313,7 +414,7 @@ int main(int argc, char **argv)
         err_n_die("usage: parameters error");
 
     if (strcmp(argv[1], "read") == 0)
-        doRead(argv[2]);
+        do_read(argv[2]);
     else if (strcmp(argv[1], "write") == 0)
         do_write(argv[2]);
     else

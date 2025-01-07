@@ -2,10 +2,8 @@
 // protoc --python_out=. dfs.proto
 syntax = "proto3";
 
-message FileRequest {
+message FileRequestRead {
     string path = 1;
-    int64 offset = 2;
-    int64 size = 3;
 }
 
 message FileRequestWrite {

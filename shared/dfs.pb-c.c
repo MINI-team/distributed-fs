@@ -7,49 +7,49 @@
 #endif
 
 #include "dfs.pb-c.h"
-void   file_request__init
-                     (FileRequest         *message)
+void   file_request_read__init
+                     (FileRequestRead         *message)
 {
-  static const FileRequest init_value = FILE_REQUEST__INIT;
+  static const FileRequestRead init_value = FILE_REQUEST_READ__INIT;
   *message = init_value;
 }
-size_t file_request__get_packed_size
-                     (const FileRequest *message)
+size_t file_request_read__get_packed_size
+                     (const FileRequestRead *message)
 {
-  assert(message->base.descriptor == &file_request__descriptor);
+  assert(message->base.descriptor == &file_request_read__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t file_request__pack
-                     (const FileRequest *message,
+size_t file_request_read__pack
+                     (const FileRequestRead *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &file_request__descriptor);
+  assert(message->base.descriptor == &file_request_read__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t file_request__pack_to_buffer
-                     (const FileRequest *message,
+size_t file_request_read__pack_to_buffer
+                     (const FileRequestRead *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &file_request__descriptor);
+  assert(message->base.descriptor == &file_request_read__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-FileRequest *
-       file_request__unpack
+FileRequestRead *
+       file_request_read__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (FileRequest *)
-     protobuf_c_message_unpack (&file_request__descriptor,
+  return (FileRequestRead *)
+     protobuf_c_message_unpack (&file_request_read__descriptor,
                                 allocator, len, data);
 }
-void   file_request__free_unpacked
-                     (FileRequest *message,
+void   file_request_read__free_unpacked
+                     (FileRequestRead *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &file_request__descriptor);
+  assert(message->base.descriptor == &file_request_read__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 void   file_request_write__init
@@ -412,7 +412,7 @@ void   commit_chunk__free_unpacked
   assert(message->base.descriptor == &commit_chunk__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor file_request__field_descriptors[3] =
+static const ProtobufCFieldDescriptor file_request_read__field_descriptors[1] =
 {
   {
     "path",
@@ -420,60 +420,34 @@ static const ProtobufCFieldDescriptor file_request__field_descriptors[3] =
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(FileRequest, path),
+    offsetof(FileRequestRead, path),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "offset",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT64,
-    0,   /* quantifier_offset */
-    offsetof(FileRequest, offset),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "size",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT64,
-    0,   /* quantifier_offset */
-    offsetof(FileRequest, size),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
-static const unsigned file_request__field_indices_by_name[] = {
-  1,   /* field[1] = offset */
+static const unsigned file_request_read__field_indices_by_name[] = {
   0,   /* field[0] = path */
-  2,   /* field[2] = size */
 };
-static const ProtobufCIntRange file_request__number_ranges[1 + 1] =
+static const ProtobufCIntRange file_request_read__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 1 }
 };
-const ProtobufCMessageDescriptor file_request__descriptor =
+const ProtobufCMessageDescriptor file_request_read__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "FileRequest",
-  "FileRequest",
-  "FileRequest",
+  "FileRequestRead",
+  "FileRequestRead",
+  "FileRequestRead",
   "",
-  sizeof(FileRequest),
-  3,
-  file_request__field_descriptors,
-  file_request__field_indices_by_name,
-  1,  file_request__number_ranges,
-  (ProtobufCMessageInit) file_request__init,
+  sizeof(FileRequestRead),
+  1,
+  file_request_read__field_descriptors,
+  file_request_read__field_indices_by_name,
+  1,  file_request_read__number_ranges,
+  (ProtobufCMessageInit) file_request_read__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor file_request_write__field_descriptors[2] =

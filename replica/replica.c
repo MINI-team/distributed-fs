@@ -32,7 +32,7 @@ int connect_with_master()
 void readChunkFile(const char *chunkname, int connfd)
 {
     int fd;
-    size_t bytes_read;
+    int bytes_read;
     char buffer[MAXLINE + 1];
 
     if ((fd = open(chunkname, O_RDONLY)) == -1)
@@ -45,8 +45,10 @@ void readChunkFile(const char *chunkname, int connfd)
 
     close(fd);
 
-    if (write(connfd, buffer, bytes_read) == -1)
+    int bytes_written;
+    if ((bytes_written = write(connfd, buffer, bytes_read)) == -1)
         err_n_die("write error");
+    printf("should have sent bytes_read: %d, bytes_written: %d\n", bytes_read, bytes_written);
 }
 
 void processRequest(char *path, int id, int connfd)
@@ -165,7 +167,7 @@ int main(int argc, char **argv)
     if ((bind(listenfd, (SA *)&servaddr, sizeof(servaddr))) < 0)
         err_n_die("bind error");
 
-    if (listen(listenfd, 10) < 0)
+    if (listen(listenfd, 100) < 0)
         err_n_die("listen error");
 
     for (;;)

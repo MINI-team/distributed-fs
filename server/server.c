@@ -129,8 +129,8 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         printf("event_data->client_data->payload_size - 1: %d\n", event_data->client_data->payload_size - 1);
         printf("halo\n");
         FileRequestWrite *fileRequestWrite = file_request_write__unpack(
-            NULL, 
-            event_data->client_data->payload_size - 1, 
+            NULL,
+            event_data->client_data->payload_size - 1,
             event_data->client_data->buffer + 1
         );
         if (!fileRequestWrite)
@@ -146,19 +146,39 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             // int k =  write(event_data->client_data->client_socket, "x", 1);
             // printf("sent k=:%d\n", k);
             int32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
-            printf("i will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
+            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
-        
+
             int32_t net_chunk_list_len = ntohl(chunk_list_len);
             if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
-                err_n_die("write error");
+                err_n_die("write len error");
 
             printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
 
-            if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
-                err_n_die("write error");
-            printf("server sent the response\n");
+            int32_t total_bytes_written = 0;
+            int32_t bytes_written;
+            while (total_bytes_written < chunk_list_len)
+            {
+                bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
+                if (bytes_written < 0)
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    {
+                        // printf("EAGAIN/EWOULDBLOK\n");
+                        continue;
+                    }
+                    err_n_die("read error");
+                }
+
+                    total_bytes_written += bytes_written;
+                    printf("bytes_written=:%d\n", bytes_written);
+                    printf("total_bytes_written:%d\n", total_bytes_written);
+                }
+
+            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+            //     err_n_die("write buffer error");
+            printf("server sent the response for write request\n");
         }
         else
         {
@@ -170,18 +190,49 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
     else if (request_type == 'r')
     {
         printf("read request detected \n"); 
-        FileRequest *fileRequest = file_request__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
-        printf("fileRequest->path: %s\n", fileRequest->path);
-        ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequest->path);
+        FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        printf("fileRequest->path: %s\n", FileRequestRead->path);
+        ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
         if (chunk_list)
         {
             size_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
+            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
 
-            if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+            int32_t net_chunk_list_len = ntohl(chunk_list_len);
+            if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
                 err_n_die("write error");
 
+            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+
+            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+            //     err_n_die("write error");
+            // printf("server sent the response for read request\n");
+
+            int32_t total_bytes_written = 0;
+            int32_t bytes_written;
+            while (total_bytes_written < chunk_list_len)
+            {
+                bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
+                if (bytes_written < 0)
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    {
+                        // printf("EAGAIN/EWOULDBLOK\n");
+                        continue;
+                    }
+                    err_n_die("read error");
+                }
+
+                    total_bytes_written += bytes_written;
+                    printf("bytes_written=:%d\n", bytes_written);
+                    printf("total_bytes_written:%d\n", total_bytes_written);
+                }
+
+            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
+            //     err_n_die("write buffer error");
+            printf("server sent the response for read request\n");
         }
         else
         {

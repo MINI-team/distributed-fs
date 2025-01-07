@@ -15,7 +15,7 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
-typedef struct FileRequest FileRequest;
+typedef struct FileRequestRead FileRequestRead;
 typedef struct FileRequestWrite FileRequestWrite;
 typedef struct Replica Replica;
 typedef struct Chunk Chunk;
@@ -31,16 +31,14 @@ typedef struct CommitChunk CommitChunk;
 
 /* --- messages --- */
 
-struct  FileRequest
+struct  FileRequestRead
 {
   ProtobufCMessage base;
   char *path;
-  int64_t offset;
-  int64_t size;
 };
-#define FILE_REQUEST__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&file_request__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, 0 }
+#define FILE_REQUEST_READ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&file_request_read__descriptor) \
+    , (char *)protobuf_c_empty_string }
 
 
 struct  FileRequestWrite
@@ -142,24 +140,24 @@ struct  CommitChunk
     , 0, 0, 0,NULL, 0,NULL }
 
 
-/* FileRequest methods */
-void   file_request__init
-                     (FileRequest         *message);
-size_t file_request__get_packed_size
-                     (const FileRequest   *message);
-size_t file_request__pack
-                     (const FileRequest   *message,
+/* FileRequestRead methods */
+void   file_request_read__init
+                     (FileRequestRead         *message);
+size_t file_request_read__get_packed_size
+                     (const FileRequestRead   *message);
+size_t file_request_read__pack
+                     (const FileRequestRead   *message,
                       uint8_t             *out);
-size_t file_request__pack_to_buffer
-                     (const FileRequest   *message,
+size_t file_request_read__pack_to_buffer
+                     (const FileRequestRead   *message,
                       ProtobufCBuffer     *buffer);
-FileRequest *
-       file_request__unpack
+FileRequestRead *
+       file_request_read__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   file_request__free_unpacked
-                     (FileRequest *message,
+void   file_request_read__free_unpacked
+                     (FileRequestRead *message,
                       ProtobufCAllocator *allocator);
 /* FileRequestWrite methods */
 void   file_request_write__init
@@ -315,8 +313,8 @@ void   commit_chunk__free_unpacked
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*FileRequest_Closure)
-                 (const FileRequest *message,
+typedef void (*FileRequestRead_Closure)
+                 (const FileRequestRead *message,
                   void *closure_data);
 typedef void (*FileRequestWrite_Closure)
                  (const FileRequestWrite *message,
@@ -348,7 +346,7 @@ typedef void (*CommitChunk_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCMessageDescriptor file_request__descriptor;
+extern const ProtobufCMessageDescriptor file_request_read__descriptor;
 extern const ProtobufCMessageDescriptor file_request_write__descriptor;
 extern const ProtobufCMessageDescriptor replica__descriptor;
 extern const ProtobufCMessageDescriptor chunk__descriptor;
