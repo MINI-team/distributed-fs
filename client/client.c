@@ -9,27 +9,6 @@ char* received_chunk_path = "test";
 
 ChunkList *chunk_list_global;
 
-void abort_with_cleanup(char *msg, int serverfd)
-{
-    printf("%s\n",msg);
-    close(serverfd);
-    exit(1);
-}
-
-int32_t read_payload_size(int serverfd)
-{
-    /* We expect that first four bytes coming should be an integer declaring payload */
-    int32_t net_payload;
-    int bytes_read;
-    
-    if ((bytes_read = read(serverfd, &net_payload, sizeof(net_payload))) < 0)
-        err_n_die("read error");
-    if (bytes_read != sizeof(net_payload))
-        abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", serverfd);
-
-    return ntohl(net_payload);
-}
-
 void writeChunkFile(const char *filepat, uint8_t *data, int length)
 {
     int fd, n;
@@ -106,7 +85,7 @@ void *getChunk(void *voidPtr)
     int pw_bytes_written;
     if ((pw_bytes_written = pwrite(args->filefd, buffer, payload, args->offset)) < 0)
         err_n_die("pwrite error");
-        
+
     printf("for chunk_id: %d, pw_bytes_written: %d, payload: %d, args->offset: %d\n", args->chunk_id, pw_bytes_written, payload, args->offset);
 
 // int total_written = 0;
@@ -165,19 +144,6 @@ void do_read(char *path)
     setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
 
     write_len_and_data(serverfd, len_fileRequestRead, buffer);
-
-    // printf("tu sie nam polaczylo\n");
-    // printf("len: %d \n", len_fileRequestRead);
-
-    // /* Sending file request */
-    // uint32_t net_len = htonl(len + 1);
-    // write(serverfd, &net_len, sizeof(net_len));
-    
-    // char request_type = 'r';
-    // write(serverfd, &request_type, 1);
-
-    // if (write(serverfd, buffer, len) != len)
-    //     err_n_die("write error");
 
     free(buffer);
 
@@ -248,12 +214,13 @@ void do_read(char *path)
                 to_join = i + 1;
                 break;
             }
+            //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
             if (i == 1)
                 break;
         }
 
         printf("joinuje\n");
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 2; i++) ////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
             if ((err = pthread_join(threads[i].tid, NULL)) != 0)
                 err_n_die("couldn't join thread");
         exit(1);
@@ -295,16 +262,17 @@ void *putChunk(void *voidPtr)
     struct sockaddr_in repladdr;
     size_t bytes_read, proto_len;
     argsThread_t *args = voidPtr;
-    char op_type[MAXLINE + 1], buffer[MAXLINE + 1];
+    char op_type[MAXLINE + 1], buffer[MAXLINE + 1]; // MAXLINE to be reconsidered!!!!
     uint8_t *proto_buf;
 
     if ((bytes_read = pread(args->filefd, buffer, CHUNK_SIZE, args->offset)) < 0)
         err_n_die("putChunk read error");
 
-    buffer[bytes_read] = '\0';
+    int modulo = args->filesize % CHUNK_SIZE;
+    if (bytes_read != CHUNK_SIZE && bytes_read != modulo)
+        err_n_die("putChunk pread bytes_read: %d, CHUNK_SIZE: %d\n, modulo: %d\n", bytes_read, CHUNK_SIZE, modulo);
 
-    // printf("read from file %s:\n%s\n", args->path, buffer);
-    // printf("%s\n", buffer);
+    buffer[bytes_read] = '\0';
 
     strcpy(op_type, "write_primary");
 
@@ -315,6 +283,7 @@ void *putChunk(void *voidPtr)
 
     setup_connection(&replicafd, args->ip, args->port);
 
+    /// this has to be refactored
     net_len = htonl(CHUNK_SIZE);
     write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
 
@@ -355,22 +324,25 @@ void do_write(char *path)
 
     free(buffer);
 
-    /*here we get the payload of the message*/
-    int32_t total_bytes_read = 0;
-    printf("reading  payload\n");
-    int32_t payload = read_payload_size(serverfd);
-    printf("payload received: %d \n", payload);
-    buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
+    /*here we get the payload of the message from the master*/
+    // int32_t total_bytes_read = 0;
+    // printf("reading  payload\n");
+    // int32_t payload = read_payload_size(serverfd);
+    // printf("payload received: %d \n", payload);
+    // buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
 
-    while (total_bytes_read < payload)
-    {
-        if ((bytes_read = read(serverfd, buffer + total_bytes_read, payload)) < 0)
-            err_n_die("read error");
+    // while (total_bytes_read < payload)
+    // {
+    //     if ((bytes_read = read(serverfd, buffer + total_bytes_read, payload)) < 0)
+    //         err_n_die("read error");
 
-        total_bytes_read += bytes_read;
-        printf("bytes_read=:%d\n", bytes_read);
-        printf("total_bytes_read:%d\n", total_bytes_read);
-    }
+    //     total_bytes_read += bytes_read;
+    //     printf("bytes_read=:%d\n", bytes_read);
+    //     printf("total_bytes_read:%d\n", total_bytes_read);
+    // }
+
+    int32_t payload;
+    read_paylaod_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
     if (!chunk_list)
@@ -410,6 +382,7 @@ void do_write(char *path)
             threads[i].port = chunk_list->chunks[index]->replicas[0]->port;
             threads[i].offset = index * CHUNK_SIZE;
             threads[i].filefd = filefd;
+            threads[i].filesize = fileRequestWrite.size;
 
             if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0)
                 err_n_die("couldn't create thread");
@@ -426,6 +399,8 @@ void do_write(char *path)
             if ((err = pthread_join(threads[i].tid, NULL)) != 0)
                 err_n_die("couldn't join thread");
     }
+
+    //  free buffer
 
     // for (int i = 0; i < chunk_list->n_chunks; i++)
     //     if ((err = pthread_join(threads[i].tid, NULL)) != 0)
@@ -452,7 +427,7 @@ int main(int argc, char **argv)
         err_n_die("usage: wrong client request");
 }
 
-int file_size(int filefd)
+int64_t file_size(int filefd)
 {
     struct stat file_stat;
 
@@ -462,5 +437,5 @@ int file_size(int filefd)
         err_n_die("fstat error");
     }
 
-    return (int)file_stat.st_size;
+    return (int64_t)file_stat.st_size;
 }

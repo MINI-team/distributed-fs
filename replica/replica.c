@@ -62,9 +62,10 @@ void processRequest(char *path, int id, int connfd)
 }
 
 void writeChunkFile(const char *filepat, uint8_t *data, int length)
-{   printf("PRINTING\n\n\n");
-    printf("%s", data);
-    exit(1);
+{   
+    // printf("PRINTING\n\n\n");
+    // printf("%s", data);
+    // exit(1);
     int fd, n;
 
     if ((fd = open(filepat, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)

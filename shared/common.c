@@ -68,23 +68,6 @@ int set_fd_nonblocking(int fd)
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void write_len_and_data(int fd, uint32_t len, uint8_t *data)
-{
-    int net_len = htonl(len), sent;
-
-    if((sent = write(fd, &net_len, sizeof(net_len))) != (int)sizeof(net_len))
-        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
-                  sent, (int)sizeof(net_len));
-
-    // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
-    if ((sent = write(fd, data, len)) != len)
-        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
-                  sent, len);
-
-    // printf("writing to replica OK\nwrote %d(/%d) bytes\n", sent, len);
-    // err = write(fd, data, len);
-}
-
 char *resolve_host(char *host_name) {
     struct hostent *host_entry;
     static char IPbuffer[INET_ADDRSTRLEN];
@@ -137,4 +120,54 @@ int bulk_write(int fd, char *buf, int count)
         count -= c;
     } while (count > 0);
     return len;
+}
+
+void abort_with_cleanup(char *msg, int serverfd)
+{
+    printf("%s\n",msg);
+    close(serverfd);
+    exit(1);
+}
+
+int32_t read_payload_size(int fd)
+{
+    /* We expect that first four bytes coming should be an integer declaring payload */
+    int32_t net_payload;
+    int bytes_read;
+    
+    if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
+        err_n_die("read error");
+    if (bytes_read != sizeof(net_payload))
+        abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", fd);
+
+    return ntohl(net_payload);
+}
+
+void read_paylaod_and_data(int fd, uint8_t **buffer, int32_t *payload)
+{
+    int32_t bytes_read = 0;
+    printf("reading payload\n");
+    (*payload) = read_payload_size(fd);
+    printf("payload received: %d \n", *payload);
+    *buffer = (uint8_t *)malloc((*payload) * sizeof(uint8_t));
+
+    if ((bytes_read = bulk_read(fd, *buffer, *payload)) != *payload)
+        err_n_die("read_paylaod_and_data bytes_read: %d, payload: %d\n", bytes_read, *payload);
+}
+
+void write_len_and_data(int fd, uint32_t len, uint8_t *data)
+{
+    int net_len = htonl(len), sent;
+
+    if((sent = bulk_write(fd, &net_len, sizeof(net_len))) != (int)sizeof(net_len))
+        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
+                  sent, (int)sizeof(net_len));
+
+    // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
+    if ((sent = bulk_write(fd, data, len)) != len)
+        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
+                  sent, len);
+
+    // printf("writing to replica OK\nwrote %d(/%d) bytes\n", sent, len);
+    // err = write(fd, data, len);
 }

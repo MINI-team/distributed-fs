@@ -19,9 +19,11 @@ typedef struct argsThread
     int offset;
     int filefd;
 
+    int64_t filesize; // for deubug reasons, to be deleted
+
 } argsThread_t;
 
-int file_size(int filefd);
+int64_t file_size(int filefd);
 
 void setup_connection(int *server_socket, char *ip, uint16_t port)
 {
