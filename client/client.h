@@ -16,7 +16,7 @@ typedef struct argsThread
     char *ip;
     uint16_t port;
 
-    int offset;
+    int64_t offset;
     int filefd;
 
     int64_t filesize; // for deubug reasons, to be deleted

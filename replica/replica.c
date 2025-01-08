@@ -185,29 +185,29 @@ int main(int argc, char **argv)
         connfd = accept(listenfd, (SA *)NULL, NULL);
 
         int msg_len, op_type_len, proto_len, buf_len;
-        n = read(connfd, &msg_len, sizeof(msg_len));
+        n = bulk_read(connfd, &msg_len, sizeof(msg_len));
         msg_len = ntohl(msg_len);
         printf("WHOLE msg_len: %d\n", msg_len);
         // printf("n: %d\n", n);
 
-        n = read(connfd, &op_type_len, sizeof(op_type_len));
+        n = bulk_read(connfd, &op_type_len, sizeof(op_type_len));
         op_type_len = ntohl(op_type_len);
         printf("op_type_len: %d\n", op_type_len);
 
         memset(operation_type_buff, 0, MAXLINE);
-        n = read(connfd, operation_type_buff, op_type_len);
+        n = bulk_read(connfd, operation_type_buff, op_type_len);
 
         printf("operation_type: %s\n", operation_type_buff);
 
         if (strcmp(operation_type_buff, "read") == 0)
         {
             printf("received read request\n");
-            n = read(connfd, &proto_len, sizeof(proto_len));
+            n = bulk_read(connfd, &proto_len, sizeof(proto_len));
             proto_len = ntohl(proto_len);
             printf("proto_len: %d\n", proto_len);
 
             memset(recvline, 0, MAXLINE);
-            n = read(connfd, recvline, MAXLINE); // proto_len instead of MAXLINE?
+            n = bulk_read(connfd, recvline, MAXLINE); // proto_len instead of MAXLINE?
             ChunkRequest *chunkRequest = chunk_request__unpack(NULL, n, recvline);
 
             printf("chunkRequest->path: %s\n", chunkRequest->path);
@@ -218,12 +218,12 @@ int main(int argc, char **argv)
         else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
         {
             printf("received %s request\n", operation_type_buff);
-            n = read(connfd, &proto_len, sizeof(proto_len));
+            n = bulk_read(connfd, &proto_len, sizeof(proto_len));
             proto_len = ntohl(proto_len);
             printf("proto_len: %d\n", proto_len);
 
             memset(recvline, 0, MAXLINE);
-            n = read(connfd, recvline, proto_len);
+            n = bulk_read(connfd, recvline, proto_len);
             Chunk *chunk = chunk__unpack(NULL, n, recvline);
 
             // printf("chunk->path: %s\n", chunk->path);
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
                        chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
             }
 
-            n = read(connfd, &buf_len, sizeof(buf_len));
+            n = bulk_read(connfd, &buf_len, sizeof(buf_len));
             buf_len = ntohl(buf_len);
             printf("buf_len: %d\n", buf_len);
 
@@ -273,7 +273,7 @@ int main(int argc, char **argv)
             if (strcmp(operation_type_buff, "write") == 0)
             {
                 char send_char = 'y';
-                n = write(connfd, &send_char, 1);
+                n = bulk_write(connfd, &send_char, 1);
                 printf("sent acknowledgement of receiving chunk\n");
             }
         }

@@ -69,7 +69,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
     set_fd_nonblocking(client_socket);
 }
 
-void add_file(char* path, int size, replica_info_t **all_replicas, GHashTable *hash_table)
+void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
