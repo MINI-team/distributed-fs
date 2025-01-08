@@ -244,7 +244,7 @@ int main(int argc, char **argv)
             memset(recvline, 0, MAXLINE);
             n = bulk_read(connfd, recvline, buf_len);
 
-            printf("received chunk:\n%s\n", recvline);
+            // printf("received chunk:\n%s\n", recvline);
 
             // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
             processWriteRequest(chunk->path, chunk->chunk_id, recvline, buf_len, chunk);

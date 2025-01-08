@@ -19,7 +19,8 @@
 
 // #define SERVER_PORT 18000
 
-#define MAXLINE 400096 // ADDITIONAL ZERO?
+#define MAXLINE 400096 // ADDITIONAL ZERO? // tested
+// #define MAXLINE 4000096
 #define MAX_FILENAME_LENGTH 200 // to be deleted
 //#define MASTER_ADDRESS "127.0.0.1"
 // #define MASTER_ADDRESS "server_container"
@@ -70,12 +71,13 @@
 // #define CHUNK_SIZE 3554432
 // #define CHUNK_SIZE 355443
 // #define CHUNK_SIZE 100000 // imp
-#define CHUNK_SIZE 300000
+#define CHUNK_SIZE 300000 // tested
+// #define CHUNK_SIZE 3000000
 // #define CHUNK_SIZE 32760
 
 // #define CHUNK_SIZE 1000
 
-#define MAX_THREADS_COUNT 16
+#define MAX_THREADS_COUNT 64
 
 #define REPLICAS_COUNT 2
 

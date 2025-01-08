@@ -214,16 +214,12 @@ void do_read(char *path)
                 to_join = i + 1;
                 break;
             }
-            //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-            if (i == 1)
-                break;
         }
 
         printf("joinuje\n");
-        for (int i = 0; i < 2; i++) ////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
+        for (int i = 0; i < to_join; i++) ////!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!11
             if ((err = pthread_join(threads[i].tid, NULL)) != 0)
                 err_n_die("couldn't join thread");
-        exit(1);
         printf("skonczylem\n");
 
     }
