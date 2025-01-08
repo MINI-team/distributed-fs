@@ -90,4 +90,6 @@ char *resolve_host(char *host_name);
 // void debug_log(int debugfd, const char *fmt, ...);
 void debug_log(FILE *debugfd, const char *fmt, ...);
 
+int bulk_read(int fd, char *buf, int count);
+int bulk_write(int fd, char *buf, int count);
 #endif

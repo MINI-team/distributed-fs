@@ -1,5 +1,16 @@
 #include "common.h"
 
+#ifndef TEMP_FAILURE_RETRY
+#define TEMP_FAILURE_RETRY(expression)             \
+    (__extension__({                               \
+        long int __result;                         \
+        do                                         \
+            __result = (long int)(expression);     \
+        while (__result == -1L && errno == EINTR); \
+        __result;                                  \
+    }))
+#endif
+
 void err_n_die(const char *fmt, ...)
 {
     int errno_save;
@@ -92,4 +103,38 @@ void debug_log(FILE *debugfd, const char *fmt, ...)
     va_start(ap, fmt);
     vfprintf(debugfd, fmt, ap);
     va_end(ap);
+}
+
+int bulk_read(int fd, char *buf, int count)
+{
+    int c;
+    int len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(read(fd, buf, count));
+        if (c < 0)
+            return c;
+        if (c == 0)
+            return len;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
+int bulk_write(int fd, char *buf, int count)
+{
+    int c;
+    int len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        if (c < 0)
+            return c;
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
 }

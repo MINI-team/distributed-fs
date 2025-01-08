@@ -32,7 +32,7 @@ int connect_with_master()
 void readChunkFile(const char *chunkname, int connfd)
 {
     int fd;
-    int bytes_read;
+    int32_t bytes_read;
     char buffer[MAXLINE + 1];
 
     if ((fd = open(chunkname, O_RDONLY)) == -1)
@@ -45,10 +45,12 @@ void readChunkFile(const char *chunkname, int connfd)
 
     close(fd);
 
-    int bytes_written;
-    if ((bytes_written = write(connfd, buffer, bytes_read)) == -1)
-        err_n_die("write error");
-    printf("should have sent bytes_read: %d, bytes_written: %d\n", bytes_read, bytes_written);
+    write_len_and_data(connfd, bytes_read, buffer);
+
+    // int bytes_written;
+    // if ((bytes_written = write(connfd, buffer, bytes_read)) == -1)
+    //     err_n_die("write error");
+    // printf("should have sent bytes_read: %d, bytes_written: %d\n", bytes_read, bytes_written);
 }
 
 void processRequest(char *path, int id, int connfd)
@@ -60,13 +62,15 @@ void processRequest(char *path, int id, int connfd)
 }
 
 void writeChunkFile(const char *filepat, uint8_t *data, int length)
-{
+{   printf("PRINTING\n\n\n");
+    printf("%s", data);
+    exit(1);
     int fd, n;
 
     if ((fd = open(filepat, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
-    if ((n = write(fd, data, length)) == -1)
+    if ((n = bulk_write(fd, data, length)) == -1)
         err_n_die("read error");
 
     close(fd);
@@ -237,7 +241,7 @@ int main(int argc, char **argv)
             printf("buf_len: %d\n", buf_len);
 
             memset(recvline, 0, MAXLINE);
-            n = read(connfd, recvline, buf_len);
+            n = bulk_read(connfd, recvline, buf_len);
 
             printf("received chunk:\n%s\n", recvline);
 
