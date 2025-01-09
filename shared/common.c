@@ -134,9 +134,10 @@ int32_t read_payload_size(int fd)
     /* We expect that first four bytes coming should be an integer declaring payload */
     int32_t net_payload;
     int bytes_read;
-    
+    // printf("wejdzie\n");
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
         err_n_die("read error");
+    // printf("a to nie wejdzie\n");
     if (bytes_read != sizeof(net_payload))
         abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", fd);
 

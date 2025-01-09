@@ -38,7 +38,7 @@ void readChunkFile(const char *chunkname, int connfd)
     if ((fd = open(chunkname, O_RDONLY)) == -1)
         err_n_die("open error");
 
-    if ((bytes_read = read(fd, buffer, MAXLINE)) == -1)
+    if ((bytes_read = bulk_read(fd, buffer, MAXLINE)) == -1)
         err_n_die("read error");
 
     buffer[bytes_read] = '\0';
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
             printf("proto_len: %d\n", proto_len);
 
             memset(recvline, 0, MAXLINE);
-            n = bulk_read(connfd, recvline, MAXLINE); // proto_len instead of MAXLINE?
+            n = bulk_read(connfd, recvline, proto_len); // proto_len instead of MAXLINE?
             ChunkRequest *chunkRequest = chunk_request__unpack(NULL, n, recvline);
 
             printf("chunkRequest->path: %s\n", chunkRequest->path);

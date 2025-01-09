@@ -32,6 +32,7 @@ void debug_chunk_write(char *path, int id, uint8_t *data, int length)
 
 void *getChunk(void *voidPtr)
 {
+    // printf("oho\n");
     int serverfd, bytes_read;
     struct sockaddr_in servaddr;
     char chunk[CHUNK_SIZE+1];
@@ -70,23 +71,26 @@ void *getChunk(void *voidPtr)
     write_len_and_data(serverfd, len, buffer);
 
     free(buffer);
-
+    // printf("oho\n");
     int32_t payload = read_payload_size(serverfd);
+    //  printf("ohop\n");
     int32_t bytes_written;
     buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
     if ((bytes_written = bulk_read(serverfd, buffer, payload)) != payload)
         err_n_die("bulk_read error for chunk_id: %d, bytes_written: %d, payload: %d\n", args->chunk_id, bytes_written, payload);
     
-
+    // printf("ohow\n");
     int pw_bytes_written;
     if ((pw_bytes_written = pwrite(args->filefd, buffer, payload, args->offset)) < 0)
         err_n_die("pwrite error");
 
     close(serverfd);
+        // printf("oho\n");
 }
 
 void do_read(char *path)
 {
+
     int                 serverfd, filefd, n, err, bytes_read;
     struct sockaddr_in  servaddr;
     char                recvline[MAXLINE];
