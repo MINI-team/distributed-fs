@@ -6,6 +6,8 @@
 // #define REPLICA_PORT 8080
 int REPLICA_PORT = 8080;
 
+#define LISTEN_BACKLOG 4096
+
 int connect_with_master()
 {
     int serverfd;
@@ -172,7 +174,7 @@ int main(int argc, char **argv)
     if ((bind(listenfd, (SA *)&servaddr, sizeof(servaddr))) < 0)
         err_n_die("bind error");
 
-    if (listen(listenfd, 100) < 0)
+    if (listen(listenfd, LISTEN_BACKLOG) < 0)
         err_n_die("listen error");
 
     for (;;)

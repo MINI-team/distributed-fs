@@ -77,7 +77,7 @@
 
 // #define CHUNK_SIZE 1000
 
-#define MAX_THREADS_COUNT 1
+#define MAX_THREADS_COUNT 16
 
 #define REPLICAS_COUNT 2
 
