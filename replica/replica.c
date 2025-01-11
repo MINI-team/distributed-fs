@@ -1,38 +1,154 @@
 #include <stdio.h>
-#include "dfs.pb-c.h"
+#include <glib.h>
+#include <malloc.h>
+#include <sys/epoll.h>
+#include <limits.h>
+#include <string.h>
 #include "common.h"
+#include "dfs.pb-c.h"
 
-// const char *SERVER_ADDRESS = "127.0.0.1";
-// #define REPLICA_PORT 8080
-int REPLICA_PORT = 8080;
+int replica_port = 8080;
 
-#define LISTEN_BACKLOG 4096
+#define MAX_EVENTS 4096
+#define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
 
-int connect_with_master()
+void server_setup(int *server_socket, int server_port, int *epoll_fd)
 {
-    int serverfd;
     struct sockaddr_in servaddr;
-    /* Connecting with the server */
-    if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    struct epoll_event event;
+
+    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         err_n_die("socket error");
+
+    int option = 1;
+    if (setsockopt(*server_socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
+        err_n_die("setsockopt error");
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(MASTER_SERVER_PORT);
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(server_port);
 
-    char* master_ip = resolve_host(MASTER_SERVER_IP);
+    if (bind(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
+        err_n_die("bind error");
 
-    if (inet_pton(AF_INET, master_ip, &servaddr.sin_addr) <= 0)
-        err_n_die("inet_pton error for connecting with master");
+    if (listen(*server_socket, 4096) < 0)
+        err_n_die("listen error");
 
-    if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
-        err_n_die("connect error");
-    
-    return serverfd;
+    set_fd_nonblocking(*server_socket);
+
+    if ((*epoll_fd = epoll_create1(0)) < 0)
+        err_n_die("epoll_create1 error");
+
+    event_data_t *server_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!server_event_data)
+        err_n_die("malloc error");
+
+    server_event_data->is_server = 1;
+    server_event_data->server_socket = *server_socket;
+
+    event.events = EPOLLIN;
+    event.data.ptr = server_event_data;
+
+    if (epoll_ctl(*epoll_fd, EPOLL_CTL_ADD, *server_socket, &event) < 0)
+        err_n_die("epoll_ctl error");
+}
+
+void handle_new_connection(int epoll_fd, int server_socket)
+{
+    int client_socket;
+    printf("New client connected\n");
+    if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
+    {
+        printf("Server couldnt accept client\n");
+        return;
+    }
+
+    event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!client_event_data)
+        err_n_die("malloc error");
+
+    client_data_t *client_data = (client_data_t *)malloc(sizeof(client_data_t));
+    if (!client_data)
+        err_n_die("malloc error");
+
+    client_data->client_socket = client_socket;
+    client_data->buffer = (uint8_t *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(uint8_t));
+    client_data->payload_size = 0;
+    client_data->bytes_stored = 0;
+    client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
+    client_data->reading_started = false;
+
+    client_event_data->is_server = 0;
+    client_event_data->client_data = client_data;
+
+    struct epoll_event event;
+    event.events = EPOLLIN;
+    event.data.ptr = client_event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
+        err_n_die("epoll_ctl error");
+
+    set_fd_nonblocking(client_socket);
+}
+
+void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket)
+{
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
+        err_n_die("epoll_ctl error");
+
+    free(event_data->client_data->buffer);
+    free(event_data->client_data);
+    free(event_data);
+    close(client_socket);
+}
+
+void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
+{
+    int client_socket = event_data->client_data->client_socket;
+    int bytes_read;
+    int32_t network_payload_size;
+
+    bytes_read = read(client_socket, &network_payload_size, sizeof(network_payload_size));
+    printf("handle_new_client_payload_declaration, bytes_read: %d\n", bytes_read);
+    if (bytes_read < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            printf("EAGAIN/EWOULDBLOK\n");
+            return;
+        }
+        err_n_die("read error");
+    }
+    if (bytes_read < sizeof(network_payload_size))
+    {
+        /*
+            Disconnect the client if the payload size cannot be fully read
+            Typically, a zero-byte read indicates the client has disconnected
+        */
+        printf("Client disconnected or sent incomplete payload size\n");
+        disconnect_client(epoll_fd, event_data, client_socket);
+        return;
+    }
+
+    /* At this point we know we have a new client who declared their payload */
+    event_data->client_data->reading_started = true;
+    event_data->client_data->payload_size = ntohl(network_payload_size);
+
+    if (event_data->client_data->payload_size <= 0 ||
+        event_data->client_data->payload_size > SINGLE_CLIENT_BUFFER_SIZE)
+    {
+        printf("Client declared invalid payload size\n");
+        disconnect_client(epoll_fd, event_data, client_socket);
+        return;
+    }
+
+    printf("Client configured, declared payload size: %d bytes\n", event_data->client_data->payload_size);
 }
 
 void readChunkFile(const char *chunkname, int connfd)
 {
+    printf("chuj, czy to sie wypisze?\n");
     int fd;
     int32_t bytes_read;
     char buffer[MAXLINE + 1];
@@ -47,7 +163,11 @@ void readChunkFile(const char *chunkname, int connfd)
 
     close(fd);
 
+    printf("chuj, czy to sie wypisze2?\n");
+
     write_len_and_data(connfd, bytes_read, buffer);
+
+    printf("chuj, czy to sie wypisze5?\n");
 
     // int bytes_written;
     // if ((bytes_written = write(connfd, buffer, bytes_read)) == -1)
@@ -55,16 +175,16 @@ void readChunkFile(const char *chunkname, int connfd)
     // printf("should have sent bytes_read: %d, bytes_written: %d\n", bytes_read, bytes_written);
 }
 
-void processRequest(char *path, int id, int connfd)
+void processReadRequest(char *path, int id, int connfd)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", REPLICA_PORT, path, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
     readChunkFile(chunkname, connfd);
 }
 
 void writeChunkFile(const char *filepat, uint8_t *data, int length)
-{   
+{
     // printf("PRINTING\n\n\n");
     // printf("%s", data);
     // exit(1);
@@ -79,211 +199,221 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
     close(fd);
 }
 
-int forwardChunk(Chunk *chunk, uint8_t *data, int data_len)
-{
-    int success = 1;
-    int replicafd, net_len, msg_len;
-    struct sockaddr_in repladdr;
-    size_t proto_len;
-    // argsThread_t *args = voidPtr;
-    char op_type[MAXLINE + 1], recvchar;
-    uint8_t *proto_buf;
-
-    strcpy(op_type, "write");
-
-    proto_len = chunk__get_packed_size(chunk);
-    proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    chunk__pack(chunk, proto_buf);
-
-    for(int i = 0; i < chunk->n_replicas; i++)
-    {
-        if (chunk->replicas[i]->port == REPLICA_PORT) // SIMPLE HEURISTIC FOR NOW,
-        // should add ip as well
-            continue;
-        memset(&repladdr, 0, sizeof(repladdr));
-        repladdr.sin_family = AF_INET;
-        repladdr.sin_port = htons(chunk->replicas[i]->port);
-
-        if (inet_pton(AF_INET, chunk->replicas[i]->ip, &repladdr.sin_addr) < 0)
-            err_n_die("inet_pton error for %s", chunk->replicas[i]->ip);
-
-        if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-            err_n_die("socket error");
-
-        if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
-            err_n_die("connect error");
-
-        net_len = htonl(CHUNK_SIZE);
-        write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
-
-        write_len_and_data(replicafd, strlen(op_type) + 1, op_type);
-
-        write_len_and_data(replicafd, proto_len, proto_buf);
-
-        write_len_and_data(replicafd, data_len, data);
-
-        // read(replicafd, &msg_len, sizeof(msg_len));
-
-        read(replicafd, &recvchar, 1);
-        
-        if(recvchar == 'y')
-            printf("received acknowledgement of receiving chunk, %c\n", recvchar);
-        else
-            success = 0;
-
-        close(replicafd);
-    }
-    return success;
-}
-
 void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
 {
     char chunkname[MAXLINE + 1];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", 
-        REPLICA_PORT, path, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk",
+             replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
     writeChunkFile(chunkname, data, length);
 }
 
-int main(int argc, char **argv)
+void process_request(int epoll_fd, event_data_t *event_data)
 {
-    int listenfd, connfd, n, res, masterfd;
-    struct sockaddr_in servaddr;
-    uint8_t operation_type_buff[MAXLINE + 1];
-    uint8_t recvline[MAXLINE + 1];
-    uint8_t *proto_buf;
-    size_t proto_len;
+    /*
+        event_data->client_data->buffer:
+        operation type - 1 byte
+        proto_buf length - 4 bytes
+        proto_buf - (proto_buf length) bytes
+        chunk content length - 4 bytes
+        chunk content - (chunk content length) bytes
+    */
+    // int msg_len, op_type_len, proto_len, buf_len;
+    uint8_t op_type;
+    uint32_t proto_len, chunk_content_len;
+    uint8_t *buffer = event_data->client_data->buffer, *proto_buf, *chunk_content_buf;
+    int current_offset = 0;
 
-    if (argc >= 2)
+    op_type = buffer[0];
+    current_offset += 1;
+
+    memcpy(&proto_len, buffer + current_offset, sizeof(uint32_t));
+    printf("proto_len (before ntohl): %d\n", proto_len);
+    proto_len = ntohl(proto_len);
+    printf("proto_len (after ntohl): %d\n", proto_len);
+    current_offset += sizeof(uint32_t);
+
+    printf("proto_len (after changing cur ofs): %d\n", proto_len); // here correct value 60
+
+    proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
+    printf("proto_len (after malloc'ing proto_len uint8_t's): %d\n", proto_len);
+    memcpy(proto_buf, buffer + current_offset, proto_len);                   // here it's 18890640
+    printf("proto_len (after memcpy'ing proto_len bytes): %d\n", proto_len); // here it's 18890640
+    current_offset += proto_len;
+
+    printf("proto_len (after current_offset += proto_len): %d\n", proto_len);
+    printf("current_offset: %d\n", current_offset);
+
+    if (op_type == 'r')
     {
-        REPLICA_PORT = atoi(argv[1]);
+        printf("received read request\n");
+        // n = bulk_read(connfd, &proto_len, sizeof(proto_len));
+        // proto_len = ntohl(proto_len);
+        // printf("proto_len: %d\n", proto_len);
+
+        // memset(recvline, 0, MAXLINE);
+        // n = bulk_read(connfd, recvline, proto_len); // proto_len instead of MAXLINE?
+        ChunkRequest *chunkRequest = chunk_request__unpack(NULL, proto_len, proto_buf);
+        if (!chunkRequest)
+            err_n_die("process_request, chunkRequest is null");
+
+        printf("chunkRequest->path: %s\n", chunkRequest->path);
+        printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
+
+        processReadRequest(chunkRequest->path, chunkRequest->chunk_id, event_data->client_data->client_socket);
+        // REPLACE THIS <-----------------------------------------------------------
+        // REPLACE THIS <-----------------------------------------------------------
+        // REPLACE THIS <-----------------------------------------------------------
+        return;
+    }
+    else if (op_type == 'w' || op_type == 'd')
+    {
+        printf("received %c request\n", op_type);
+
+        memcpy(&chunk_content_len, buffer + current_offset, sizeof(uint32_t));
+        chunk_content_len = ntohl(chunk_content_len);
+        current_offset += sizeof(uint32_t);
+
+        chunk_content_buf = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
+        memcpy(chunk_content_buf, buffer + current_offset, chunk_content_len);
+
+        // n = bulk_read(connfd, &proto_len, sizeof(proto_len));
+        // proto_len = ntohl(proto_len);
+        // printf("proto_len: %d\n", proto_len);
+
+        // memset(recvline, 0, MAXLINE);
+        // n = bulk_read(connfd, recvline, proto_len);
+
+        Chunk *chunk = chunk__unpack(NULL, proto_len, proto_buf);
+
+        if (!chunk)
+            err_n_die("process_request, chunk is null");
+
+        // printf("chunk->path: %s\n", chunk->path);
+        printf("chunk->chunk_id: %d\n", chunk->chunk_id);
+        printf("chunk->n_replicas: %ld\n", chunk->n_replicas);
+
+        for (int i = 0; i < chunk->n_replicas; i++)
+        {
+            printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
+                   chunk->replicas[i]->name, chunk->replicas[i]->ip,
+                   chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+        }
+
+        // n = bulk_read(connfd, &buf_len, sizeof(buf_len));
+        // buf_len = ntohl(buf_len);
+        // printf("buf_len: %d\n", buf_len);
+
+        // memset(recvline, 0, MAXLINE);
+        // n = bulk_read(connfd, recvline, buf_len);
+
+        // printf("received chunk:\n%s\n", recvline);
+
+        // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
+        processWriteRequest(chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk);
+
+        // chuj z replikacją
+        // if (strcmp(operation_type_buff, "write_primary") == 0)
+        // {
+        //     res = forwardChunk(chunk, recvline, buf_len);
+        //     CommitChunk commit = COMMIT_CHUNK__INIT;
+        //     commit.success = res;
+        //     commit.chunk_id = chunk->chunk_id;
+
+        //     if (res)
+        //         commit.replicas_success = chunk->replicas;
+        //     else
+        //         commit.replicas_fail = chunk->replicas;
+
+        //     msg_len = commit_chunk__get_packed_size(&commit);
+        //     proto_buf = (uint8_t *)malloc(msg_len * sizeof(uint8_t));
+        //     commit_chunk__pack(&commit, proto_buf);
+
+        //     // REPLACE THIS
+        //     // masterfd = connect_with_master();
+        //     // write_len_and_data(masterfd, msg_len, proto_buf);
+        //     // close(masterfd);
+        // }
+
+        // DUPA DUPA DUPA
+        // if (strcmp(operation_type_buff, "write") == 0)
+        // {
+        //     char send_char = 'y';
+        //     n = bulk_write(connfd, &send_char, 1);
+        //     printf("sent acknowledgement of receiving chunk\n");
+        // }
+    }
+    else
+        err_n_die("wrong operation type");
+
+    // else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
+}
+
+void handle_client(int epoll_fd, event_data_t *event_data)
+{
+    int client_socket = event_data->client_data->client_socket;
+    int bytes_read;
+
+    if (event_data->client_data->reading_started == false)
+    {
+        handle_new_client_payload_declaration(epoll_fd, event_data);
+        return;
     }
 
-    if ((listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        err_n_die("socket error");
+    printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->client_data->payload_size);
+    bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
+                      event_data->client_data->space_left);
 
-    int option = 1;
-    if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0)
-        err_n_die("setsockopt error");
-
-    memset(&servaddr, 0, sizeof(servaddr));
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(REPLICA_PORT);
-
-    if ((bind(listenfd, (SA *)&servaddr, sizeof(servaddr))) < 0)
-        err_n_die("bind error");
-
-    if (listen(listenfd, LISTEN_BACKLOG) < 0)
-        err_n_die("listen error");
-
-    for (;;)
+    if (bytes_read == 0)
     {
-        struct sockaddr_in addr;
-        socklen_t addrlen;
+        printf("Client disconnected \n");
+        disconnect_client(epoll_fd, event_data, client_socket);
+        return;
+    }
 
-        printf("Waiting for a connection on port %d\n", REPLICA_PORT);
-        fflush(stdout);
-        connfd = accept(listenfd, (SA *)NULL, NULL);
+    printf("handle_client, bytes_read: %d\n", bytes_read);
 
-        int msg_len, op_type_len, proto_len, buf_len;
-        n = bulk_read(connfd, &msg_len, sizeof(msg_len));
-        msg_len = ntohl(msg_len);
-        printf("WHOLE msg_len: %d\n", msg_len);
-        // printf("n: %d\n", n);
+    event_data->client_data->space_left -= bytes_read;
+    event_data->client_data->bytes_stored += bytes_read;
 
-        n = bulk_read(connfd, &op_type_len, sizeof(op_type_len));
-        op_type_len = ntohl(op_type_len);
-        printf("op_type_len: %d\n", op_type_len);
+    if (event_data->client_data->bytes_stored == event_data->client_data->payload_size)
+        process_request(epoll_fd, event_data);
+    else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size) /*multi-queries clients - TODO*/
+        err_n_die("undefined");
+}
 
-        memset(operation_type_buff, 0, MAXLINE);
-        n = bulk_read(connfd, operation_type_buff, op_type_len);
+int main(int argc, char **argv)
+{
+    int server_socket, epoll_fd, running = 1;
+    struct epoll_event events[MAX_EVENTS];
 
-        printf("operation_type: %s\n", operation_type_buff);
+    if (argc >= 2)
+        replica_port = atoi(argv[1]);
 
-        if (strcmp(operation_type_buff, "read") == 0)
+    server_setup(&server_socket, replica_port, &epoll_fd);
+
+    while (running)
+    {
+        printf("\n Replica %d polling for events \n", replica_port);
+
+        // MAX_EVENTS: 1000, przyjdzie na raz 30
+        int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); // connect
+        printf("Ready events: %d \n", event_count);
+
+        for (int i = 0; i < event_count; i++)
         {
-            printf("received read request\n");
-            n = bulk_read(connfd, &proto_len, sizeof(proto_len));
-            proto_len = ntohl(proto_len);
-            printf("proto_len: %d\n", proto_len);
+            event_data_t *event_data = (event_data_t *)events[i].data.ptr;
 
-            memset(recvline, 0, MAXLINE);
-            n = bulk_read(connfd, recvline, proto_len); // proto_len instead of MAXLINE?
-            ChunkRequest *chunkRequest = chunk_request__unpack(NULL, n, recvline);
-
-            printf("chunkRequest->path: %s\n", chunkRequest->path);
-            printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
-
-            processRequest(chunkRequest->path, chunkRequest->chunk_id, connfd);
-        }
-        else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
-        {
-            printf("received %s request\n", operation_type_buff);
-            n = bulk_read(connfd, &proto_len, sizeof(proto_len));
-            proto_len = ntohl(proto_len);
-            printf("proto_len: %d\n", proto_len);
-
-            memset(recvline, 0, MAXLINE);
-            n = bulk_read(connfd, recvline, proto_len);
-            Chunk *chunk = chunk__unpack(NULL, n, recvline);
-
-            // printf("chunk->path: %s\n", chunk->path);
-            printf("chunk->chunk_id: %d\n", chunk->chunk_id);
-            printf("chunk->n_replicas: %ld\n", chunk->n_replicas);
-
-            for (int i = 0; i < chunk->n_replicas; i++)
+            if (event_data->is_server)
             {
-                printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
-                       chunk->replicas[i]->name, chunk->replicas[i]->ip,
-                       chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+                printf("server event\n");
+                handle_new_connection(epoll_fd, server_socket);
             }
-
-            n = bulk_read(connfd, &buf_len, sizeof(buf_len));
-            buf_len = ntohl(buf_len);
-            printf("buf_len: %d\n", buf_len);
-
-            memset(recvline, 0, MAXLINE);
-            n = bulk_read(connfd, recvline, buf_len);
-
-            // printf("received chunk:\n%s\n", recvline);
-
-            // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
-            processWriteRequest(chunk->path, chunk->chunk_id, recvline, buf_len, chunk);
-
-            if (strcmp(operation_type_buff, "write_primary") == 0)
+            else
             {
-                res = forwardChunk(chunk, recvline, buf_len);
-                CommitChunk commit = COMMIT_CHUNK__INIT;
-                commit.success = res;
-                commit.chunk_id = chunk->chunk_id;
-                
-                if(res)
-                    commit.replicas_success = chunk->replicas;
-                else
-                    commit.replicas_fail = chunk->replicas;
-                
-                msg_len = commit_chunk__get_packed_size(&commit);
-                proto_buf = (uint8_t *)malloc(msg_len * sizeof(uint8_t));
-                commit_chunk__pack(&commit, proto_buf);
-
-                // REPLACE THIS
-                // masterfd = connect_with_master();
-                // write_len_and_data(masterfd, msg_len, proto_buf);
-                // close(masterfd);
-            }
-            if (strcmp(operation_type_buff, "write") == 0)
-            {
-                char send_char = 'y';
-                n = bulk_write(connfd, &send_char, 1);
-                printf("sent acknowledgement of receiving chunk\n");
+                printf("client event\n");
+                handle_client(epoll_fd, event_data);
             }
         }
-        else
-            err_n_die("wrong operation type");
-
-        close(connfd);
-
-        printf("---------------------------------------------\n");
     }
 }
