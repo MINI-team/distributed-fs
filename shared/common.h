@@ -77,12 +77,37 @@
 
 // #define CHUNK_SIZE 1000
 
-#define MAX_THREADS_COUNT 16
+#define MAX_THREADS_COUNT 1
 
 #define REPLICAS_COUNT 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr
+
+typedef struct {
+    int client_socket;
+    uint8_t *buffer;
+    int payload_size;
+    int bytes_stored;
+    int space_left;
+    bool reading_started;
+} client_data_t;
+
+/* This struct we keep for every descriptor that will be multiplexed with epoll */
+typedef struct {
+    int is_server; 
+    union {
+        int server_socket;          // server event
+        client_data_t *client_data;  // client connection
+    };
+} event_data_t;
+
+typedef struct {
+    int id;
+    char *ip;
+    int32_t port;
+    int stored_chunks;
+} replica_info_t;
 
 void err_n_die(const char *fmt, ...);
 char *bin2hex(const unsigned char *input, size_t len);

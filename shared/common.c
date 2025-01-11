@@ -160,14 +160,23 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data)
 {
     int net_len = htonl(len), sent;
 
+    printf("chuj, czy to sie wypisze3?\n");
     if((sent = bulk_write(fd, &net_len, sizeof(net_len))) != (int)sizeof(net_len))
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, (int)sizeof(net_len));
 
+    printf("chuj, czy to sie wypisze4?, len = %d\n", len);
     // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
     if ((sent = bulk_write(fd, data, len)) != len)
+    {
+        printf("dupa\n");
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
+    }
+
+
+    printf("bufffer\n");
+    
 
     // printf("writing to replica OK\nwrote %d(/%d) bytes\n", sent, len);
     // err = write(fd, data, len);

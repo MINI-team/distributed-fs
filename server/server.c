@@ -143,8 +143,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         if (chunk_list)
         {
             printf("oho i hit client: %d\n", event_data->client_data->client_socket);
-            // int k =  write(event_data->client_data->client_socket, "x", 1);
-            // printf("sent k=:%d\n", k);
+
             int32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
             printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
@@ -175,17 +174,12 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
                     printf("bytes_written=:%d\n", bytes_written);
                     printf("total_bytes_written:%d\n", total_bytes_written);
                 }
-
-            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
-            //     err_n_die("write buffer error");
             printf("server sent the response for write request\n");
         }
         else
         {
             printf("not found \n");
         }
-
-        // printf("fileRequestWrite->size: %d\n", fileRequestWrite->size);
     }
     else if (request_type == 'r')
     {
@@ -196,23 +190,20 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         if (chunk_list)
         {
             size_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
-            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
+            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len)); // not needed
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
 
+            // possibly bulk this
             int32_t net_chunk_list_len = ntohl(chunk_list_len);
             if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
                 err_n_die("write error");
 
             printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
 
-            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
-            //     err_n_die("write error");
-            // printf("server sent the response for read request\n");
-
             int32_t total_bytes_written = 0;
             int32_t bytes_written;
-            while (total_bytes_written < chunk_list_len)
+            while (total_bytes_written < chunk_list_len) // should be bulk_write
             {
                 bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
                 if (bytes_written < 0)
@@ -224,14 +215,11 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
                     }
                     err_n_die("read error");
                 }
-
                     total_bytes_written += bytes_written;
                     printf("bytes_written=:%d\n", bytes_written);
                     printf("total_bytes_written:%d\n", total_bytes_written);
-                }
+            }
 
-            // if (write(event_data->client_data->client_socket, buffer, chunk_list_len) != chunk_list_len)
-            //     err_n_die("write buffer error");
             printf("server sent the response for read request\n");
         }
         else
@@ -356,13 +344,13 @@ int main()
     initialize_demo_replicas(all_replicas);
     server_setup(&server_socket, &epoll_fd, &event);
 
-    // add_file("ala", 80, all_replicas, hash_table);
 
     while (running) 
     {
         printf("\n Server polling for events \n");
         
-        int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        // MAX_EVENTS: 1000, przyjdzie na raz 30 
+        int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); //connect
         printf("Ready events: %d \n", event_count);
 
         for (int i = 0; i < event_count; i++) 
@@ -444,7 +432,7 @@ void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
     if (bind(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("bind error");
     
-    if (listen(*server_socket, 10) < 0)
+    if (listen(*server_socket, 4096) < 0)
         err_n_die("listen error");
 
     set_fd_nonblocking(*server_socket);
