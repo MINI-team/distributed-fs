@@ -222,69 +222,31 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
         proto_buf - (proto_buf length) bytes
         chunk content length - 4 bytes
         chunk content - (chunk content length) bytes
-    */
+    */ 
 
-    int success = 1, replicafd;
+    int success = 1, replicafd, ret;
     char recvchar;
     
-    // int replicafd, net_len, msg_len;
-    // struct sockaddr_in repladdr;
-    // size_t proto_len;
-    // argsThread_t *args = voidPtr;
-    // char op_type[MAXLINE + 1], recvchar;
-    // uint8_t *proto_buf;
-
-    // uint8_t op_type = 'd';
     buffer[0] = 'd';
-
-    // uint32_t proto_len, chunk_content_len;
-    // uint8_t *buffer = event_data->client_data->buffer, *proto_buf, *chunk_content_buf;
-    // uint8_t *proto_buf, *chunk_content_buf;
-
-    // strcpy(op_type, "write");
-
-    // proto_len = chunk__get_packed_size(chunk);
-    // proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    // chunk__pack(chunk, proto_buf);
 
     for (int i = 0; i < chunk->n_replicas; i++)
     {
         if (chunk->replicas[i]->port == replica_port) // SIMPLE HEURISTIC FOR NOW,
                                                       // should add ip as well
             continue;
-            
-        // memset(&repladdr, 0, sizeof(repladdr));
-        // repladdr.sin_family = AF_INET;
-        // repladdr.sin_port = htons(chunk->replicas[i]->port);
-
-        // if (inet_pton(AF_INET, chunk->replicas[i]->ip, &repladdr.sin_addr) < 0)
-        //     err_n_die("inet_pton error for %s", chunk->replicas[i]->ip);
-
-        // if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-        //     err_n_die("socket error");
-
-        // if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
-        //     err_n_die("connect error");
         
-        setup_connection(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
+        ret = setup_connection_retry(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
+        if (ret < 0)
+        {
+            printf("skipping this replica\n");
+            continue;
+        }
+        // setup_connection(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
         // set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         printf("payload_size=%d\n", payload_size);
         printf("w tym miejscu bedzie zle\n");
         write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
-
-
-        // net_len = htonl(CHUNK_SIZE);
-        // write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
-
-        // write_len_and_data(replicafd, strlen(op_type) + 1, op_type);
-
-        // write_len_and_data(replicafd, proto_len, proto_buf);
-
-        // write_len_and_data(replicafd, data_len, data);
-
-        // read(replicafd, &msg_len, sizeof(msg_len));
-
 
         printf("before reading ack char\n");
 
@@ -327,8 +289,6 @@ void process_request(int epoll_fd, event_data_t *event_data)
         operation type - 1 byte
         proto_buf length - 4 bytes
         proto_buf - (proto_buf length) bytes
-
-
     */
     uint8_t     op_type;
     uint32_t    proto_len, chunk_content_len;
@@ -340,31 +300,17 @@ void process_request(int epoll_fd, event_data_t *event_data)
     current_offset += 1;
 
     memcpy(&proto_len, buffer + current_offset, sizeof(uint32_t));
-    printf("proto_len (before ntohl): %d\n", proto_len);
     proto_len = ntohl(proto_len);
-    printf("proto_len (after ntohl): %d\n", proto_len);
     current_offset += sizeof(uint32_t);
 
-    printf("proto_len (after changing cur ofs): %d\n", proto_len); // here correct value 60
-
     proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    printf("proto_len (after malloc'ing proto_len uint8_t's): %d\n", proto_len);
     memcpy(proto_buf, buffer + current_offset, proto_len);                   // here it's 18890640
-    printf("proto_len (after memcpy'ing proto_len bytes): %d\n", proto_len); // here it's 18890640
     current_offset += proto_len;
-
-    printf("proto_len (after current_offset += proto_len): %d\n", proto_len);
-    printf("current_offset: %d\n", current_offset);
 
     if (op_type == 'r')
     {
         printf("received read request\n");
-        // n = bulk_read(connfd, &proto_len, sizeof(proto_len));
-        // proto_len = ntohl(proto_len);
-        // printf("proto_len: %d\n", proto_len);
-
-        // memset(recvline, 0, MAXLINE);
-        // n = bulk_read(connfd, recvline, proto_len); // proto_len instead of MAXLINE?
+     
         ChunkRequest *chunkRequest = chunk_request__unpack(NULL, proto_len, proto_buf);
         if (!chunkRequest)
             err_n_die("process_request, chunkRequest is null");

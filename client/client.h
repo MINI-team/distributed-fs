@@ -13,8 +13,11 @@ typedef struct argsThread
     char *path;
     int chunk_id;
 
+    // Replicas data
+    int n_replicas;
     char *ip;
     uint16_t port;
+    Replica **replicas;
 
     int64_t offset;
     int filefd;

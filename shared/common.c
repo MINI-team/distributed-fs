@@ -202,3 +202,29 @@ void setup_connection(int *server_socket, char *ip, uint16_t port)
         err_n_die("connect error");
     }
 }
+
+int setup_connection_retry(int *server_socket, char *ip, uint16_t port)
+{
+    struct sockaddr_in servaddr;
+#ifdef DOCKER
+    ip = resolve_host(ip);
+#endif
+    
+    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
+
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error");
+    
+    if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
+    {
+        printf("IP: %s, Port: %d unavailable!! Retrying with different one\n", ip, port);
+        return -1;
+    }
+    
+    return 0;
+}

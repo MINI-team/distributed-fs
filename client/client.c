@@ -32,7 +32,7 @@ void debug_chunk_write(char *path, int id, uint8_t *data, int length)
 
 void *getChunk(void *voidPtr)
 {
-    int replicafd, net_len;
+    int replicafd, net_len, ret = -1;
     struct sockaddr_in repladdr;
     size_t bytes_read, proto_len;
     argsThread_t *args = voidPtr;
@@ -65,7 +65,21 @@ void *getChunk(void *voidPtr)
     // uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequest * sizeof(uint8_t));
     // chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
 
-    setup_connection(&replicafd, args->ip, args->port);
+    printf("aha\n");
+    for (int i = 0; i < args->n_replicas; i++)
+        if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
+        {
+            printf("i:%d\n", i);
+            break;
+        }
+
+    if (ret < 0)
+        err_n_die("each replica is dead");
+
+
+    printf("hello\n");
+
+    // setup_connection(&replicafd, args->ip, args->port);
     /*
         payload_size - 4 bytes
         operation type - 1 byte
@@ -201,10 +215,16 @@ void do_read(char *path)
         for (int i = 0; i < MAX_THREADS_COUNT; i++)
         {
             printf("submiting chunk_id: %d\n", index);
+            int n_replicas = chunkList->chunks[index]->n_replicas;
+
             threads[i].chunk_id = index;
             threads[i].path = path;
-            threads[i].ip = chunkList->chunks[index]->replicas[0]->ip;
-            threads[i].port = chunkList->chunks[index]->replicas[0]->port;
+            // threads[i].ip = (char **)malloc(n_replicas * sizeof(char*));
+            threads[i].n_replicas = chunkList->chunks[index]->n_replicas;
+            threads[i].replicas = chunkList->chunks[index]->replicas;
+            // threads[i].ip = chunkList->chunks[index]->replicas[0]->ip;
+            // threads[i].port = chunkList->chunks[index]->replicas[0]->port;
+            
             threads[i].offset = (int64_t)index * CHUNK_SIZE;
             threads[i].filefd = filefd;
 
@@ -231,7 +251,7 @@ void do_read(char *path)
 void *putChunk(void *voidPtr)
 {
     // printf("hello\n");
-    int replicafd, net_len;
+    int replicafd, net_len, ret = -1;
     struct sockaddr_in repladdr;
     size_t bytes_read, proto_len;
     argsThread_t *args = voidPtr;
@@ -257,7 +277,16 @@ void *putChunk(void *voidPtr)
     uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequestWrite * sizeof(uint8_t));
     chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
 
-    setup_connection(&replicafd, args->ip, args->port);
+    for (int i = 0; i < args->n_replicas; i++)
+        if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
+        {
+            printf("i:%d\n", i);
+            break;
+        }
+
+    if (ret < 0)
+        err_n_die("each replica is dead");
+
     /*
         payload_size - 4 bytes
         operation type - 1 byte
@@ -343,8 +372,9 @@ void do_write(char *path)
             printf("submiting chunk_id: %d\n", index);
             threads[i].chunk_id = index;
             threads[i].path = path;
-            threads[i].ip = chunk_list->chunks[index]->replicas[0]->ip;
-            threads[i].port = chunk_list->chunks[index]->replicas[0]->port;
+            threads[i].n_replicas = chunk_list->chunks[index]->n_replicas;
+            threads[i].replicas = chunk_list->chunks[index]->replicas;
+
             threads[i].offset = (int64_t) index * CHUNK_SIZE;
             threads[i].filefd = filefd;
             threads[i].filesize = fileRequestWrite.size;
