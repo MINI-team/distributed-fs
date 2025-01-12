@@ -270,7 +270,7 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
         // set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         printf("payload_size=%d\n", payload_size);
-        printf("tu sie nam wyjebie\n");
+        printf("w tym miejscu bedzie zle\n");
         write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
 
 
@@ -285,7 +285,12 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
 
         // read(replicafd, &msg_len, sizeof(msg_len));
 
+
+        printf("before reading ack char\n");
+
         read(replicafd, &recvchar, 1); // to jest  do wyjebania
+
+        printf("after reading ack char\n");
 
         if (recvchar == 'y')
             printf("received acknowledgement of receiving chunk, %c\n", recvchar);
@@ -444,6 +449,12 @@ void process_request(int epoll_fd, event_data_t *event_data)
             // masterfd = connect_with_master();
             // write_len_and_data(masterfd, msg_len, proto_buf);
             // close(masterfd);
+        }
+        else
+        {
+            char send_char = 'y';
+            int n = bulk_write(event_data->client_data->client_socket, &send_char, 1);
+            printf("sent acknowledgement of receiving chunk\n");
         }
 
         // DUPA DUPA DUPA

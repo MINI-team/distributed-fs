@@ -173,6 +173,10 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data)
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
+    else
+    {
+        printf("write_len_and_data_succeeded\n");
+    }
 }
 
 void setup_connection(int *server_socket, char *ip, uint16_t port)
