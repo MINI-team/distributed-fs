@@ -122,6 +122,38 @@ int bulk_write(int fd, char *buf, int count)
     return len;
 }
 
+// write - blokujacy, zablokuje replike dopki client nie zrobi
+
+int bulk_write_nonblock(int fd, char *buf, int count)
+{
+    int c;
+    int len = 0;
+    do
+    {
+        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        
+        if (c < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
+                // continue;
+                return -1;
+            }
+            err_n_die("read error"); // maybe replace THIS <--------------------------------
+            // -----------------------------------------------------------------------------
+        }
+        
+        // if (c < 0)
+        //     return c;
+        
+        buf += c;
+        len += c;
+        count -= c;
+    } while (count > 0);
+    return len;
+}
+
 void abort_with_cleanup(char *msg, int serverfd)
 {
     printf("%s\n",msg);

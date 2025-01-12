@@ -189,6 +189,7 @@ void do_read(char *path)
 
     int32_t total_bytes_read = 0;
     int32_t payload = read_payload_size(serverfd);
+
     buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
 
     while (total_bytes_read < payload)

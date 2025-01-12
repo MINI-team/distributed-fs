@@ -37,8 +37,9 @@ void handle_new_connection(int epoll_fd, int server_socket)
     printf("New client connected\n");
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
-        printf("Server couldnt accept client\n");
-        return;
+        // printf("Server couldnt accept client\n");
+        err_n_die("Server couldnt accept client");
+        // return;
     }
 
     event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
@@ -100,17 +101,17 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
             
             int rand_ind;
             // rand_ind = 0;
-            rand_ind = i % 2;
+            // rand_ind = i % 2;
 
-            if (j == 0 || j == 1)
-                rand_ind = i % 2;
-            if (j == 2)
-                rand_ind = (i+1) % 2;
-            
             // if (j == 0 || j == 1)
-            //     rand_ind = 0;
+            //     rand_ind = i % 2;
             // if (j == 2)
-            //     rand_ind = 1;
+            //     rand_ind = (i+1) % 2;
+            
+            if (j == 0 || j == 1)
+                rand_ind = 0;
+            if (j == 2)
+                rand_ind = 1;
 
             // else
             //     rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
@@ -159,32 +160,52 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
 
-            int32_t net_chunk_list_len = ntohl(chunk_list_len);
-            if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
-                err_n_die("write len error");
+            uint32_t chunk_list_net_len = htonl(chunk_list_len);
+            uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
+            event_data->client_data->out_payload_size = out_payload_size;
+            event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+            memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
+            memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
+            event_data->client_data->bytes_sent = 0;
+            event_data->client_data->left_to_send = out_payload_size;
+            
+            event_data->is_server = 0;
 
-            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+            struct epoll_event event;
+            event.events = EPOLLOUT;
+            event.data.ptr = event_data;
 
-            int32_t total_bytes_written = 0;
-            int32_t bytes_written;
-            while (total_bytes_written < chunk_list_len)
-            {
-                bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
-                if (bytes_written < 0)
-                {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    {
-                        // printf("EAGAIN/EWOULDBLOK\n");
-                        continue;
-                    }
-                    err_n_die("read error");
-                }
+            if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
+                err_n_die("unable to add EPOLLOUT");
 
-                    total_bytes_written += bytes_written;
-                    printf("bytes_written=:%d\n", bytes_written);
-                    printf("total_bytes_written:%d\n", total_bytes_written);
-                }
-            printf("server sent the response for write request\n");
+            printf("from now on it's EPOLLOUT\n");
+
+            // int32_t net_chunk_list_len = ntohl(chunk_list_len);
+            // if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
+            //     err_n_die("write len error");
+
+            // printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+
+            // int32_t total_bytes_written = 0;
+            // int32_t bytes_written;
+            // while (total_bytes_written < chunk_list_len)
+            // {
+            //     bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
+            //     if (bytes_written < 0)
+            //     {
+            //         if (errno == EAGAIN || errno == EWOULDBLOCK)
+            //         {
+            //             printf("EAGAIN/EWOULDBLOK\n");
+            //             continue;
+            //         }
+            //         err_n_die("read error");
+            //     }
+
+            //         total_bytes_written += bytes_written;
+            //         printf("bytes_written=:%d\n", bytes_written);
+            //         printf("total_bytes_written:%d\n", total_bytes_written);
+            //     }
+            // printf("server sent the response for write request\n");
         }
         else
         {
@@ -199,38 +220,33 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
         if (chunk_list)
         {
-            size_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
+            uint32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
             printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len)); // not needed
             uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
             chunk_list__pack(chunk_list, buffer);
 
-            // possibly bulk this
-            int32_t net_chunk_list_len = ntohl(chunk_list_len);
-            if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
-                err_n_die("write error");
+            /*
+                out_payload_size = sizeof(uint32_t) + chunk_list_len
+            */
+            uint32_t chunk_list_net_len = htonl(chunk_list_len);
+            uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
+            event_data->client_data->out_payload_size = out_payload_size;
+            event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+            memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
+            memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
+            event_data->client_data->bytes_sent = 0;
+            event_data->client_data->left_to_send = out_payload_size;
+            
+            event_data->is_server = 0;
 
-            printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
+            struct epoll_event event;
+            event.events = EPOLLOUT;
+            event.data.ptr = event_data;
 
-            int32_t total_bytes_written = 0;
-            int32_t bytes_written;
-            while (total_bytes_written < chunk_list_len) // should be bulk_write
-            {
-                bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
-                if (bytes_written < 0)
-                {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    {
-                        // printf("EAGAIN/EWOULDBLOK\n");
-                        continue;
-                    }
-                    err_n_die("read error");
-                }
-                    total_bytes_written += bytes_written;
-                    printf("bytes_written=:%d\n", bytes_written);
-                    printf("total_bytes_written:%d\n", total_bytes_written);
-            }
+            if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
+                err_n_die("unable to add EPOLLOUT");
 
-            printf("server sent the response for read request\n");
+            printf("from now on it's EPOLLOUT\n");
         }
         else
         {
@@ -262,6 +278,19 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
     free(event_data->client_data);
     free(event_data);
     close(client_socket);
+}
+
+void write_to_client(int epoll_fd, event_data_t *client_event_data)
+{
+    int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
+        client_event_data->client_data->out_buffer, client_event_data->client_data->out_payload_size);
+
+    if (bytes_written == -1)
+        return;
+    if (bytes_written == client_event_data->client_data->out_payload_size)
+        disconnect_client(epoll_fd, client_event_data, client_event_data->client_data->client_socket);
+    else
+        err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
 }
 
 void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
@@ -374,8 +403,21 @@ int main()
             }
             else
             {
-                printf("client event\n");
-                handle_client(epoll_fd, event_data, all_replicas, hash_table);                
+                
+                if (events[i].events & EPOLLIN)
+                {
+                    printf("client event EPOLLIN triggered\n");
+                    handle_client(epoll_fd, event_data, all_replicas, hash_table);
+                }
+                else if (events[i].events & EPOLLOUT)
+                {
+                    printf("client event EPOLLOUT triggered, do nothing for now\n");
+                    write_to_client(epoll_fd, event_data);
+                } 
+                else
+                {
+                    err_n_die("SHOULDNT HAPPEN!!!");
+                }
             }
         }
     }

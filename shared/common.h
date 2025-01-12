@@ -86,11 +86,19 @@
 
 typedef struct {
     int client_socket;
-    uint8_t *buffer;
+    
+    // INBOUND
+    uint8_t *buffer; // in buffer
     int payload_size;
     int bytes_stored;
     int space_left;
     bool reading_started;
+    
+    // OUTBOUND
+    uint8_t *out_buffer;
+    int out_payload_size;
+    int bytes_sent;
+    int left_to_send;
 } client_data_t;
 
 /* This struct we keep for every descriptor that will be multiplexed with epoll */
@@ -118,6 +126,7 @@ void debug_log(FILE *debugfd, const char *fmt, ...);
 
 int bulk_read(int fd, char *buf, int count);
 int bulk_write(int fd, char *buf, int count);
+int bulk_write_nonblock(int fd, char *buf, int count);
 
 void abort_with_cleanup(char *msg, int serverfd);
 int32_t read_payload_size(int serverfd);
