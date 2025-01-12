@@ -123,4 +123,7 @@ void abort_with_cleanup(char *msg, int serverfd);
 int32_t read_payload_size(int serverfd);
 void read_paylaod_and_data(int serverfd, uint8_t **buffer, int32_t *payload);
 void write_len_and_data(int fd, uint32_t len, uint8_t *data);
+
+void setup_connection(int *server_socket, char *ip, uint16_t port);
+
 #endif

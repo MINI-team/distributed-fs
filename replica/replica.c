@@ -193,6 +193,7 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
     if ((fd = open(filepat, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
+    printf("imo tu sie wyjebie\n");
     if ((n = bulk_write(fd, data, length)) == -1)
         err_n_die("read error");
 
@@ -208,21 +209,127 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *c
     writeChunkFile(chunkname, data, length);
 }
 
-void process_request(int epoll_fd, event_data_t *event_data)
+// int forwardChunk(Chunk *chunk, uint32_t proto_len, uint8_t *proto_buf,
+//                  uint32_t chunk_content_len, uint8_t *chunk_content_buf)
+int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
 {
     /*
-        event_data->client_data->buffer:
+        uint8_t *buffer
+
+        Replication 'd'
         operation type - 1 byte
         proto_buf length - 4 bytes
         proto_buf - (proto_buf length) bytes
         chunk content length - 4 bytes
         chunk content - (chunk content length) bytes
     */
-    // int msg_len, op_type_len, proto_len, buf_len;
-    uint8_t op_type;
-    uint32_t proto_len, chunk_content_len;
-    uint8_t *buffer = event_data->client_data->buffer, *proto_buf, *chunk_content_buf;
-    int current_offset = 0;
+
+    int success = 1, replicafd;
+    char recvchar;
+    
+    // int replicafd, net_len, msg_len;
+    // struct sockaddr_in repladdr;
+    // size_t proto_len;
+    // argsThread_t *args = voidPtr;
+    // char op_type[MAXLINE + 1], recvchar;
+    // uint8_t *proto_buf;
+
+    // uint8_t op_type = 'd';
+    buffer[0] = 'd';
+
+    // uint32_t proto_len, chunk_content_len;
+    // uint8_t *buffer = event_data->client_data->buffer, *proto_buf, *chunk_content_buf;
+    // uint8_t *proto_buf, *chunk_content_buf;
+
+    // strcpy(op_type, "write");
+
+    // proto_len = chunk__get_packed_size(chunk);
+    // proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
+    // chunk__pack(chunk, proto_buf);
+
+    for (int i = 0; i < chunk->n_replicas; i++)
+    {
+        if (chunk->replicas[i]->port == replica_port) // SIMPLE HEURISTIC FOR NOW,
+                                                      // should add ip as well
+            continue;
+            
+        // memset(&repladdr, 0, sizeof(repladdr));
+        // repladdr.sin_family = AF_INET;
+        // repladdr.sin_port = htons(chunk->replicas[i]->port);
+
+        // if (inet_pton(AF_INET, chunk->replicas[i]->ip, &repladdr.sin_addr) < 0)
+        //     err_n_die("inet_pton error for %s", chunk->replicas[i]->ip);
+
+        // if ((replicafd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        //     err_n_die("socket error");
+
+        // if (connect(replicafd, (SA *)&repladdr, sizeof(repladdr)) < 0)
+        //     err_n_die("connect error");
+        
+        setup_connection(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
+        // set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        
+        printf("payload_size=%d\n", payload_size);
+        printf("tu sie nam wyjebie\n");
+        write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
+
+
+        // net_len = htonl(CHUNK_SIZE);
+        // write(replicafd, &net_len, sizeof(net_len)); // this is supposed to be the size of the whole message, but idk why we would use that
+
+        // write_len_and_data(replicafd, strlen(op_type) + 1, op_type);
+
+        // write_len_and_data(replicafd, proto_len, proto_buf);
+
+        // write_len_and_data(replicafd, data_len, data);
+
+        // read(replicafd, &msg_len, sizeof(msg_len));
+
+        read(replicafd, &recvchar, 1); // to jest  do wyjebania
+
+        if (recvchar == 'y')
+            printf("received acknowledgement of receiving chunk, %c\n", recvchar);
+        else
+            success = 0;
+
+        close(replicafd);
+    }
+    return success;
+}
+
+void process_request(int epoll_fd, event_data_t *event_data)
+{
+    /*
+    event_data->client_data->buffer:
+        
+        Write 'w'
+        
+        operation type - 1 byte
+        proto_buf length - 4 bytes
+        proto_buf - (proto_buf length) bytes
+        chunk content length - 4 bytes
+        chunk content - (chunk content length) bytes
+
+        Replication 'd'
+        operation type - 1 byte
+        proto_buf length - 4 bytes
+        proto_buf - (proto_buf length) bytes
+        chunk content length - 4 bytes
+        chunk content - (chunk content length) bytes
+
+
+        Read 'r'
+        operation type - 1 byte
+        proto_buf length - 4 bytes
+        proto_buf - (proto_buf length) bytes
+
+
+    */
+    uint8_t     op_type;
+    uint32_t    proto_len, chunk_content_len;
+    uint8_t     *buffer = event_data->client_data->buffer;
+    uint8_t     *proto_buf, *chunk_content_buf;
+    int         current_offset = 0;
 
     op_type = buffer[0];
     current_offset += 1;
@@ -312,28 +419,32 @@ void process_request(int epoll_fd, event_data_t *event_data)
         // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
         processWriteRequest(chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk);
 
-        // chuj z replikacją
-        // if (strcmp(operation_type_buff, "write_primary") == 0)
-        // {
-        //     res = forwardChunk(chunk, recvline, buf_len);
-        //     CommitChunk commit = COMMIT_CHUNK__INIT;
-        //     commit.success = res;
-        //     commit.chunk_id = chunk->chunk_id;
+        // chuj z replikacją (duplikacją)
+        if (op_type == 'w')
+        {
+            // int res = forwardChunk(chunk, proto_len, proto_buf, chunk_content_len, chunk_content_buf);
+            int res = forwardChunk(chunk, event_data->client_data->payload_size, buffer);
+            
+            // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            // CommitChunk commit = COMMIT_CHUNK__INIT;
+            // commit.success = res;
+            // commit.chunk_id = chunk->chunk_id;
 
-        //     if (res)
-        //         commit.replicas_success = chunk->replicas;
-        //     else
-        //         commit.replicas_fail = chunk->replicas;
+            // if (res)
+            //     commit.replicas_success = chunk->replicas;
+            // else
+            //     commit.replicas_fail = chunk->replicas;
 
-        //     msg_len = commit_chunk__get_packed_size(&commit);
-        //     proto_buf = (uint8_t *)malloc(msg_len * sizeof(uint8_t));
-        //     commit_chunk__pack(&commit, proto_buf);
+            // msg_len = commit_chunk__get_packed_size(&commit);
+            // proto_buf = (uint8_t *)malloc(msg_len * sizeof(uint8_t));
+            // commit_chunk__pack(&commit, proto_buf);
 
-        //     // REPLACE THIS
-        //     // masterfd = connect_with_master();
-        //     // write_len_and_data(masterfd, msg_len, proto_buf);
-        //     // close(masterfd);
-        // }
+
+            // REPLACE THIS
+            // masterfd = connect_with_master();
+            // write_len_and_data(masterfd, msg_len, proto_buf);
+            // close(masterfd);
+        }
 
         // DUPA DUPA DUPA
         // if (strcmp(operation_type_buff, "write") == 0)

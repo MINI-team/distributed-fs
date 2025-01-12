@@ -173,11 +173,28 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data)
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
+}
 
-
-    printf("bufffer\n");
+void setup_connection(int *server_socket, char *ip, uint16_t port)
+{
+    struct sockaddr_in servaddr;
+#ifdef DOCKER
+    ip = resolve_host(ip);
+#endif
     
+    if ((*server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        err_n_die("socket error");
 
-    // printf("writing to replica OK\nwrote %d(/%d) bytes\n", sent, len);
-    // err = write(fd, data, len);
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error");
+    
+    if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
+    {
+        printf("IP: %s, Port: %d\n", ip, port);
+        err_n_die("connect error");
+    }
 }

@@ -100,11 +100,15 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
             
             int rand_ind;
             rand_ind = 0;
-            // if (j == 0)
-            //     rand_ind = 0;
+            
+            if (j == 0 || j == 1)
+                rand_ind = 0;
+            if (j == 2)
+                rand_ind = 1;
+
             // else
             //     rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
-            
+
             // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);
