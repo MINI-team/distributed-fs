@@ -70,6 +70,34 @@ void handle_new_connection(int epoll_fd, int server_socket)
     set_fd_nonblocking(client_socket);
 }
 
+void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_list)
+{
+    uint32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
+    printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
+    uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
+    chunk_list__pack(chunk_list, buffer);
+
+    uint32_t chunk_list_net_len = htonl(chunk_list_len);
+    uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
+    event_data->client_data->out_payload_size = out_payload_size;
+    event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+    memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
+    memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
+    event_data->client_data->bytes_sent = 0;
+    event_data->client_data->left_to_send = out_payload_size;
+
+    event_data->is_server = 0;
+
+    struct epoll_event event;
+    event.events = EPOLLOUT;
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
+
+    printf("from now on it's EPOLLOUT\n");
+}
+
 void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
@@ -155,30 +183,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         {
             printf("oho i hit client: %d\n", event_data->client_data->client_socket);
 
-            int32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
-            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
-            uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
-            chunk_list__pack(chunk_list, buffer);
-
-            uint32_t chunk_list_net_len = htonl(chunk_list_len);
-            uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
-            event_data->client_data->out_payload_size = out_payload_size;
-            event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
-            memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
-            memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
-            event_data->client_data->bytes_sent = 0;
-            event_data->client_data->left_to_send = out_payload_size;
-            
-            event_data->is_server = 0;
-
-            struct epoll_event event;
-            event.events = EPOLLOUT;
-            event.data.ptr = event_data;
-
-            if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
-                err_n_die("unable to add EPOLLOUT");
-
-            printf("from now on it's EPOLLOUT\n");
+            setup_outbound(epoll_fd, event_data, chunk_list);
 
             // int32_t net_chunk_list_len = ntohl(chunk_list_len);
             // if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
@@ -218,35 +223,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
         printf("fileRequest->path: %s\n", FileRequestRead->path);
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
+        
         if (chunk_list)
         {
-            uint32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
-            printf("I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len)); // not needed
-            uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
-            chunk_list__pack(chunk_list, buffer);
-
-            /*
-                out_payload_size = sizeof(uint32_t) + chunk_list_len
-            */
-            uint32_t chunk_list_net_len = htonl(chunk_list_len);
-            uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
-            event_data->client_data->out_payload_size = out_payload_size;
-            event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
-            memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
-            memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
-            event_data->client_data->bytes_sent = 0;
-            event_data->client_data->left_to_send = out_payload_size;
-            
-            event_data->is_server = 0;
-
-            struct epoll_event event;
-            event.events = EPOLLOUT;
-            event.data.ptr = event_data;
-
-            if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
-                err_n_die("unable to add EPOLLOUT");
-
-            printf("from now on it's EPOLLOUT\n");
+            setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
         {

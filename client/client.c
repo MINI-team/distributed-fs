@@ -382,6 +382,8 @@ void do_write(char *path)
 
             if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0)
                 err_n_die("couldn't create thread");
+
+            printf("after pthread create\n");
             
             if(++index == chunk_list->n_chunks)
             {
