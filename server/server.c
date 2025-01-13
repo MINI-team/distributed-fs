@@ -96,6 +96,8 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
         err_n_die("unable to add EPOLLOUT");
 
     printf("from now on it's EPOLLOUT\n");
+
+    free(buffer);
 }
 
 void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTable *hash_table)
@@ -184,33 +186,6 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             printf("oho i hit client: %d\n", event_data->client_data->client_socket);
 
             setup_outbound(epoll_fd, event_data, chunk_list);
-
-            // int32_t net_chunk_list_len = ntohl(chunk_list_len);
-            // if (write(event_data->client_data->client_socket, &net_chunk_list_len, sizeof(net_chunk_list_len)) != sizeof(net_chunk_list_len))
-            //     err_n_die("write len error");
-
-            // printf("i will send this client chunk_list_len=%d bytes\n", chunk_list_len);
-
-            // int32_t total_bytes_written = 0;
-            // int32_t bytes_written;
-            // while (total_bytes_written < chunk_list_len)
-            // {
-            //     bytes_written = write(event_data->client_data->client_socket, buffer + total_bytes_written, chunk_list_len - total_bytes_written);
-            //     if (bytes_written < 0)
-            //     {
-            //         if (errno == EAGAIN || errno == EWOULDBLOCK)
-            //         {
-            //             printf("EAGAIN/EWOULDBLOK\n");
-            //             continue;
-            //         }
-            //         err_n_die("read error");
-            //     }
-
-            //         total_bytes_written += bytes_written;
-            //         printf("bytes_written=:%d\n", bytes_written);
-            //         printf("total_bytes_written:%d\n", total_bytes_written);
-            //     }
-            // printf("server sent the response for write request\n");
         }
         else
         {
@@ -251,10 +226,12 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
 
 void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket)
 {
+    printf("DISCONNECT\n");
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
         err_n_die("epoll_ctl error");
 
     free(event_data->client_data->buffer);
+    free(event_data->client_data->out_buffer);
     free(event_data->client_data);
     free(event_data);
     close(client_socket);
@@ -391,7 +368,7 @@ int main()
                 }
                 else if (events[i].events & EPOLLOUT)
                 {
-                    printf("client event EPOLLOUT triggered, do nothing for now\n");
+                    printf("client event EPOLLOUT triggered\n");
                     write_to_client(epoll_fd, event_data);
                 } 
                 else

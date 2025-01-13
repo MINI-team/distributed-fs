@@ -112,6 +112,7 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
         err_n_die("epoll_ctl error");
 
     free(event_data->client_data->buffer);
+    free(event_data->client_data->out_buffer);
     free(event_data->client_data);
     free(event_data);
     close(client_socket);
@@ -342,7 +343,6 @@ void process_request(int epoll_fd, event_data_t *event_data)
         chunk_content_buf = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
         memcpy(chunk_content_buf, buffer + current_offset, chunk_content_len);
 
-
         Chunk *chunk = chunk__unpack(NULL, proto_len, proto_buf);
 
         if (!chunk)
@@ -406,6 +406,8 @@ void process_request(int epoll_fd, event_data_t *event_data)
         err_n_die("wrong operation type");
 
     // else if (strcmp(operation_type_buff, "write_primary") == 0 || strcmp(operation_type_buff, "write") == 0)
+    free(proto_buf);
+    free(chunk_content_buf);
 }
 
 void handle_client(int epoll_fd, event_data_t *event_data)

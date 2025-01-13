@@ -86,6 +86,9 @@ void *getChunk(void *voidPtr)
 
     close(replicafd);
 
+    free(proto_buf);
+    free(buffer);
+
     return NULL;
 }
 
@@ -222,6 +225,9 @@ void *putChunk(void *voidPtr)
     write_len_and_data(replicafd, bytes_read, file_buf);
 
     close(replicafd);
+
+    free(file_buf);
+    free(proto_buf);
 
     return NULL;
 }
