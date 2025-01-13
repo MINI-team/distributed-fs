@@ -272,8 +272,10 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *c
 
 // }
 
-int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
+int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffer)
 {
+    // if (replica_port == 8081)
+    //     err_n_die("test exit");
     /*
         uint8_t *buffer
 
@@ -303,16 +305,43 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
             continue;
         }
         // setup_connection(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
-        // set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-        int32_t out_payload_size = sizeof(uint32_t) + payload_size;
+        event_data_t *event_data = (event_data_t *)malloc(sizeof(event_data_t));
+        if (!event_data)
+            err_n_die("malloc error");
 
+        client_data_t *client_data = (client_data_t *)malloc(sizeof(client_data_t));
+        if (!client_data)
+            err_n_die("malloc error");
         
-        printf("payload_size=%d\n", payload_size);
-        printf("w tym miejscu bedzie zle\n");
-        write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
+        event_data->client_data = client_data;
+        event_data->client_data->buffer = NULL;
+        event_data->client_data->client_socket = replicafd;
+        event_data->is_server = false;
 
-        printf("before reading ack char\n");
+        uint32_t chunk_net_size = htonl(chunk_size);
+        int32_t out_payload_size = sizeof(uint32_t) + chunk_size;
+        event_data->client_data->out_payload_size = out_payload_size;
+        event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+        memcpy(event_data->client_data->out_buffer, &chunk_net_size, sizeof(uint32_t));
+        memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_size);
+        event_data->client_data->bytes_sent = 0;
+        event_data->client_data->left_to_send = out_payload_size;
+
+        printf("payload_size=%d\n", chunk_size);
+
+        struct epoll_event event;
+        event.events = EPOLLOUT;
+        event.data.ptr = event_data;
+
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, replicafd, &event) < 0)
+            err_n_die("unable to add EPOLLOUT");
+        
+
+        // write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
+
+        // printf("before reading ack char\n");
 
         // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
         // read(replicafd, &recvchar, 1); // to jest  do wyjebania
@@ -324,7 +353,6 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
         // else
         //     success = 0;
 
-        close(replicafd);
     }
     return success;
 }
@@ -418,11 +446,10 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         processWriteRequest(chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk);
 
-        // chuj z replikacją (duplikacją)
         if (op_type == 'w')
         {
             // int res = forwardChunk(chunk, proto_len, proto_buf, chunk_content_len, chunk_content_buf);
-            int res = forwardChunk(chunk, event_data->client_data->payload_size, buffer);
+            int res = forwardChunk(epoll_fd, chunk, event_data->client_data->payload_size, buffer);
             
             // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
             // CommitChunk commit = COMMIT_CHUNK__INIT;

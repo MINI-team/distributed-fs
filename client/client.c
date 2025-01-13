@@ -145,7 +145,7 @@ void do_read(char *path)
 
             if ((err = pthread_create(&(threads[i].tid), NULL, getChunk, &threads[i])) != 0)
                 err_n_die("couldn't create thread");
-            
+
             if(++index == chunkList->n_chunks)
             {
                 work = false;
@@ -215,6 +215,7 @@ void *putChunk(void *voidPtr)
     */
 
     bulk_write(replicafd, &payload_size, sizeof(payload_size));
+    printf("to sie niby udalo\n");
 
     write(replicafd, &op_type, 1);
     
@@ -305,6 +306,8 @@ void do_write(char *path)
 
             if ((err = pthread_create(&(threads[i].tid), NULL, putChunk, &threads[i])) != 0)
                 err_n_die("couldn't create thread");
+
+            // sleep(1);
 
             printf("after pthread create\n");
             

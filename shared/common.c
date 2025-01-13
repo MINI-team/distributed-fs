@@ -134,7 +134,8 @@ ssize_t bulk_write(int fd, const void *buf, size_t count)
 
     while (count > 0)
     {
-        ssize_t c = write(fd, p, count);
+        ssize_t c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
+        printf("bulk_write: po write, c = %d\n", c);
         if (c < 0) {
             // If interrupted by a signal, you might want to continue
             if (errno == EINTR) {

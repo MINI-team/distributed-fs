@@ -76,9 +76,11 @@
 
 // #define CHUNK_SIZE 1000
 
+// #define CHUNK_SIZE 
+
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-#define MAX_THREADS_COUNT 1
+#define MAX_THREADS_COUNT 16
 
 #define REPLICAS_COUNT 2
 
@@ -102,12 +104,20 @@ typedef struct {
     int left_to_send;
 } client_data_t;
 
+typedef struct {
+    uint8_t *out_buffer;
+    int out_payload_size;
+    int bytes_sent;
+    int left_to_send;
+} duplication_data_t;
+
 /* This struct we keep for every descriptor that will be multiplexed with epoll */
 typedef struct {
     int is_server; 
     union {
         int server_socket;          // server event
         client_data_t *client_data;  // client connection
+        duplication_data_t *duplication_data;
     };
 } event_data_t;
 

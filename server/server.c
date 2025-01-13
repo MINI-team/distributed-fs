@@ -135,15 +135,15 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
             // rand_ind = 0;
             // rand_ind = i % 2;
 
-            // if (j == 0 || j == 1)
-            //     rand_ind = i % 2;
-            // if (j == 2)
-            //     rand_ind = (i+1) % 2;
-            
             if (j == 0 || j == 1)
-                rand_ind = 0;
+                rand_ind = i % 2;
             if (j == 2)
-                rand_ind = 1;
+                rand_ind = (i+1) % 2;
+            
+            // if (j == 0 || j == 1)
+            //     rand_ind = 0;
+            // if (j == 2)
+            //     rand_ind = 1;
 
             // else
             //     rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
