@@ -70,7 +70,7 @@
 // #define CHUNK_SIZE 3554432
 // #define CHUNK_SIZE 355443
 // #define CHUNK_SIZE 100000 // imp
-#define CHUNK_SIZE 300000 // tested
+// #define CHUNK_SIZE 300000 // tested
 // #define CHUNK_SIZE 3000000
 // #define CHUNK_SIZE 32760
 
@@ -128,11 +128,11 @@ void debug_log(FILE *debugfd, const char *fmt, ...);
 int bulk_read(int fd, void *buf, int count);
 // int bulk_write(int fd, void *buf, int count);
 ssize_t bulk_write(int fd, const void *buf, size_t count);
-int bulk_write_nonblock(int fd, void *buf, int count);
+int bulk_write_nonblock(client_data_t *client_data);
 
 void abort_with_cleanup(char *msg, int serverfd);
-int32_t read_payload_size(int serverfd);
-void read_paylaod_and_data(int serverfd, uint8_t **buffer, int32_t *payload);
+uint32_t read_payload_size(int serverfd);
+void read_paylaod_and_data(int serverfd, uint8_t **buffer, uint32_t *payload);
 void write_len_and_data(int fd, uint32_t len, uint8_t *data);
 
 void setup_connection(int *server_socket, char *ip, uint16_t port);

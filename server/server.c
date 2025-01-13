@@ -79,6 +79,8 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
 
     uint32_t chunk_list_net_len = htonl(chunk_list_len);
     uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
+    printf("chunk_list_len: %d\n", chunk_list_len);
+
     event_data->client_data->out_payload_size = out_payload_size;
     event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
     memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
@@ -231,7 +233,11 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
         err_n_die("epoll_ctl error");
 
     free(event_data->client_data->buffer);
-    free(event_data->client_data->out_buffer);
+    if (event_data->client_data->out_buffer)
+    {
+        free(event_data->client_data->out_buffer);
+        event_data->client_data->out_buffer = NULL;
+    }
     free(event_data->client_data);
     free(event_data);
     close(client_socket);
@@ -239,8 +245,12 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
 {
-    int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
-        client_event_data->client_data->out_buffer, client_event_data->client_data->out_payload_size);
+    // int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
+    //     client_event_data->client_data->out_buffer,
+    //     client_event_data->client_data->left_to_send
+    // );
+
+    int bytes_written = bulk_write_nonblock(client_event_data->client_data);
 
     if (bytes_written == -1)
         return;

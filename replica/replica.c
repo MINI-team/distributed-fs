@@ -92,6 +92,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
     client_data->bytes_stored = 0;
     client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
     client_data->reading_started = false;
+    client_data->out_buffer = NULL;
 
     client_event_data->is_server = 0;
     client_event_data->client_data = client_data;
@@ -112,7 +113,11 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
         err_n_die("epoll_ctl error");
 
     free(event_data->client_data->buffer);
-    free(event_data->client_data->out_buffer);
+    if (event_data->client_data->out_buffer)
+    {
+        free(event_data->client_data->out_buffer);
+        event_data->client_data->out_buffer = NULL;
+    }
     free(event_data->client_data);
     free(event_data);
     close(client_socket);
@@ -161,7 +166,7 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     printf("Client configured, declared payload size: %d bytes\n", event_data->client_data->payload_size);
 }
 
-void readChunkFile(const char *chunkname, int connfd)
+void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname)
 {
     int fd, bytes_read;
     int64_t chunk_size;
@@ -177,18 +182,59 @@ void readChunkFile(const char *chunkname, int connfd)
         err_n_die("putChunk read error");
 
     printf("to ostatnie, bytes_read: %d\n", bytes_read);
-    set_fd_blocking(connfd); // tego bardzo nie chcemy !!!!!!!!!!!!!!!!!!!!
-    write_len_and_data(connfd, chunk_size, file_buf);
+    // set_fd_blocking(event_data->client_data->client_socket); // tego bardzo nie chcemy !!!!!!!!!!!!!!!!!!!!
+
+    /*
+    musimy ustawic dwa pola
+    event_data->client_data->out_payload_size 
+    event_data->client_data->out_buffer
+
+    eout_buffer:
+    chunk_size: 4 bytes
+    file_buf: chunk_size bytes
+    */
+
+    uint32_t chunk_net_size = htonl(chunk_size);
+    uint32_t out_payload_size = sizeof(uint32_t) + chunk_size;
+    event_data->client_data->out_payload_size = out_payload_size;
+    event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+    memcpy(event_data->client_data->out_buffer, &chunk_net_size, sizeof(uint32_t));
+    memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), file_buf, chunk_size);
+    event_data->client_data->bytes_sent = 0;
+    event_data->client_data->left_to_send = out_payload_size;
+
+
+    struct epoll_event event;
+    event.events = EPOLLOUT;
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
+
     free(file_buf);
     close(fd);
 }
 
-void processReadRequest(char *path, int id, int connfd)
+
+void write_to_client(int epoll_fd, event_data_t *client_event_data)
+{
+    int bytes_written = bulk_write_nonblock(client_event_data->client_data);
+    printf("poszlo bytes_written: %d, w sumie wyslano: %d\n", bytes_written, client_event_data->client_data->bytes_sent);
+
+    if (bytes_written == -1)
+        return;
+    if (bytes_written == client_event_data->client_data->out_payload_size)
+        disconnect_client(epoll_fd, client_event_data, client_event_data->client_data->client_socket);
+    else
+        err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
+}
+
+void processReadRequest(int epoll_fd, event_data_t *event_data, char *path, int id)
 {
     char chunkname[MAX_FILENAME_LENGTH];
     snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
-    readChunkFile(chunkname, connfd);
+    readChunkFile(epoll_fd, event_data, chunkname);
 }
 
 void writeChunkFile(const char *filepat, uint8_t *data, int length)
@@ -258,7 +304,8 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
 
         printf("before reading ack char\n");
 
-        read(replicafd, &recvchar, 1); // to jest  do wyjebania
+        // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+        // read(replicafd, &recvchar, 1); // to jest  do wyjebania
 
         printf("after reading ack char\n");
 
@@ -326,7 +373,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
         printf("chunkRequest->path: %s\n", chunkRequest->path);
         printf("chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
 
-        processReadRequest(chunkRequest->path, chunkRequest->chunk_id, event_data->client_data->client_socket);
+        processReadRequest(epoll_fd, event_data, chunkRequest->path, chunkRequest->chunk_id);
         // REPLACE THIS <-----------------------------------------------------------
         // REPLACE THIS <-----------------------------------------------------------
         // REPLACE THIS <-----------------------------------------------------------
@@ -389,9 +436,10 @@ void process_request(int epoll_fd, event_data_t *event_data)
         }
         else
         {
-            char send_char = 'y';
-            int n = bulk_write(event_data->client_data->client_socket, &send_char, 1);
-            printf("sent acknowledgement of receiving chunk\n");
+            // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+            // char send_char = 'y';
+            // int n = bulk_write(event_data->client_data->client_socket, &send_char, 1);
+            // printf("sent acknowledgement of receiving chunk\n");
         }
 
         // DUPA DUPA DUPA
@@ -472,8 +520,23 @@ int main(int argc, char **argv)
             }
             else
             {
-                printf("client event\n");
-                handle_client(epoll_fd, event_data);
+                // printf("client event\n");
+                // handle_client(epoll_fd, event_data);
+
+                if (events[i].events & EPOLLIN)
+                {
+                    printf("client event EPOLLIN triggered\n");
+                    handle_client(epoll_fd, event_data);
+                }
+                else if (events[i].events & EPOLLOUT)
+                {
+                    printf("client event EPOLLOUT triggered\n");
+                    write_to_client(epoll_fd, event_data);
+                } 
+                else
+                {
+                    err_n_die("SHOULDNT HAPPEN!!!");
+                }
             }
         }
     }

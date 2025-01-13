@@ -156,38 +156,32 @@ ssize_t bulk_write(int fd, const void *buf, size_t count)
     return total_written;
 }
 
-
-
-// write - blokujacy, zablokuje replike dopki client nie zrobi
-
-int bulk_write_nonblock(int fd, void *buf, int count)
+int bulk_write_nonblock(client_data_t *client_data)
 {
     int c;
-    int len = 0;
+
     do
     {
-        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+        c = TEMP_FAILURE_RETRY(write(client_data->client_socket, 
+            client_data->out_buffer + client_data->bytes_sent, 
+            client_data->left_to_send
+        ));
         
         if (c < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
                 printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
-                // continue;
                 return -1;
             }
             err_n_die("read error"); // maybe replace THIS <--------------------------------
             // -----------------------------------------------------------------------------
         }
         
-        // if (c < 0)
-        //     return c;
-        
-        buf += c;
-        len += c;
-        count -= c;
-    } while (count > 0);
-    return len;
+        client_data->bytes_sent += c;
+        client_data->left_to_send -= c;
+    } while (client_data->left_to_send > 0);
+    return client_data->bytes_sent;
 }
 
 void abort_with_cleanup(char *msg, int serverfd)
@@ -197,14 +191,16 @@ void abort_with_cleanup(char *msg, int serverfd)
     exit(1);
 }
 
-int32_t read_payload_size(int fd)
+uint32_t read_payload_size(int fd)
 {
     /* We expect that first four bytes coming should be an integer declaring payload */
-    int32_t net_payload;
+    uint32_t net_payload;
     int bytes_read;
     // printf("wejdzie\n");
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
         err_n_die("read error");
+
+    printf("bytes_read: %d\n", bytes_read);
     // printf("a to nie wejdzie\n");
     if (bytes_read != sizeof(net_payload))
         abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", fd);
@@ -212,9 +208,9 @@ int32_t read_payload_size(int fd)
     return ntohl(net_payload);
 }
 
-void read_paylaod_and_data(int fd, uint8_t **buffer, int32_t *payload)
+void read_paylaod_and_data(int fd, uint8_t **buffer, uint32_t *payload)
 {
-    int32_t bytes_read = 0;
+    uint32_t bytes_read = 0;
     printf("reading payload\n");
     (*payload) = read_payload_size(fd);
     printf("payload received: %d \n", *payload);

@@ -111,10 +111,9 @@ void do_read(char *path)
     setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
 
     write_len_and_data(serverfd, len_fileRequestRead, buffer);
-
     free(buffer);
 
-    int32_t payload;
+    uint32_t payload;
     read_paylaod_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunkList = chunk_list__unpack(NULL, payload, buffer);
@@ -258,12 +257,14 @@ void do_write(char *path)
 
     free(buffer);
 
-    int32_t payload;
+    uint32_t payload;
     read_paylaod_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
     if (!chunk_list)
         err_n_die("chunk_list is null");
+    else
+        printf("chunk_list NOT null\n");
 
     chunk_list_global = chunk_list;
 
