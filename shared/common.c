@@ -156,17 +156,39 @@ ssize_t bulk_write(int fd, const void *buf, size_t count)
     return total_written;
 }
 
-int bulk_write_nonblock(client_data_t *client_data)
+// int bulk_write_nonblock(client_data_t *client_data)
+// {
+//     int c;
+//     do
+//     {
+//         c = TEMP_FAILURE_RETRY(write(client_data->client_socket, 
+//             client_data->out_buffer + client_data->bytes_sent, 
+//             client_data->left_to_send
+//         ));
+        
+//         if (c < 0)
+//         {
+//             if (errno == EAGAIN || errno == EWOULDBLOCK)
+//             {
+//                 printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
+//                 return -1;
+//             }
+//             err_n_die("read error"); // maybe replace THIS <--------------------------------
+//             // -----------------------------------------------------------------------------
+//         }
+        
+//         client_data->bytes_sent += c;
+//         client_data->left_to_send -= c;
+//     } while (client_data->left_to_send > 0);
+//     return client_data->bytes_sent;
+// }
+
+int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
 {
     int c;
-
     do
     {
-        c = TEMP_FAILURE_RETRY(write(client_data->client_socket, 
-            client_data->out_buffer + client_data->bytes_sent, 
-            client_data->left_to_send
-        ));
-        
+        c = TEMP_FAILURE_RETRY(write(fd, buf + *bytes_sent, *left_to_send));
         if (c < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -174,14 +196,13 @@ int bulk_write_nonblock(client_data_t *client_data)
                 printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
                 return -1;
             }
-            err_n_die("read error"); // maybe replace THIS <--------------------------------
-            // -----------------------------------------------------------------------------
+            err_n_die("read error");
         }
-        
-        client_data->bytes_sent += c;
-        client_data->left_to_send -= c;
-    } while (client_data->left_to_send > 0);
-    return client_data->bytes_sent;
+
+        *bytes_sent += c;
+        *left_to_send -= c;
+    } while (*left_to_send > 0);
+    return *bytes_sent;
 }
 
 void abort_with_cleanup(char *msg, int serverfd)

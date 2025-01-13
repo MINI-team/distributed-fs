@@ -128,7 +128,8 @@ void debug_log(FILE *debugfd, const char *fmt, ...);
 int bulk_read(int fd, void *buf, int count);
 // int bulk_write(int fd, void *buf, int count);
 ssize_t bulk_write(int fd, const void *buf, size_t count);
-int bulk_write_nonblock(client_data_t *client_data);
+// int bulk_write_nonblock(client_data_t *client_data);
+int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send);
 
 void abort_with_cleanup(char *msg, int serverfd);
 uint32_t read_payload_size(int serverfd);

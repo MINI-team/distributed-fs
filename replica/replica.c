@@ -218,7 +218,11 @@ void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
 {
-    int bytes_written = bulk_write_nonblock(client_event_data->client_data);
+    int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
+        client_event_data->client_data->out_buffer,
+        &(client_event_data->client_data->bytes_sent),
+        &(client_event_data->client_data->left_to_send)
+    );
     printf("poszlo bytes_written: %d, w sumie wyslano: %d\n", bytes_written, client_event_data->client_data->bytes_sent);
 
     if (bytes_written == -1)
@@ -263,8 +267,11 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *c
     writeChunkFile(chunkname, data, length);
 }
 
-// int forwardChunk(Chunk *chunk, uint32_t proto_len, uint8_t *proto_buf,
-//                  uint32_t chunk_content_len, uint8_t *chunk_content_buf)
+// void setup_outbound(int epoll_fd, )
+// {
+
+// }
+
 int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
 {
     /*
@@ -297,6 +304,9 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
         }
         // setup_connection(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
         // set_fd_nonblocking(replicafd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        int32_t out_payload_size = sizeof(uint32_t) + payload_size;
+
         
         printf("payload_size=%d\n", payload_size);
         printf("w tym miejscu bedzie zle\n");
@@ -307,12 +317,12 @@ int forwardChunk(Chunk *chunk, uint32_t payload_size, uint8_t *buffer)
         // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
         // read(replicafd, &recvchar, 1); // to jest  do wyjebania
 
-        printf("after reading ack char\n");
+        // printf("after reading ack char\n");
 
-        if (recvchar == 'y')
-            printf("received acknowledgement of receiving chunk, %c\n", recvchar);
-        else
-            success = 0;
+        // if (recvchar == 'y')
+        //     printf("received acknowledgement of receiving chunk, %c\n", recvchar);
+        // else
+        //     success = 0;
 
         close(replicafd);
     }

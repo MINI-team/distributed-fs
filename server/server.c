@@ -245,12 +245,13 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
 {
-    // int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
-    //     client_event_data->client_data->out_buffer,
-    //     client_event_data->client_data->left_to_send
-    // );
+    int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
+        client_event_data->client_data->out_buffer,
+        &(client_event_data->client_data->bytes_sent),
+        &(client_event_data->client_data->left_to_send)
+    );
 
-    int bytes_written = bulk_write_nonblock(client_event_data->client_data);
+    // int bytes_written = bulk_write_nonblock(client_event_data->client_data);
 
     if (bytes_written == -1)
         return;
