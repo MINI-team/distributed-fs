@@ -12,6 +12,20 @@ int replica_port = 8080;
 #define MAX_EVENTS 4096
 #define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
 
+int set_fd_blocking(int fd)
+{
+    int flags;
+    // Get current file descriptor flags
+    if ((flags = fcntl(fd, F_GETFL)) < 0)
+        err_n_die("fcntl error");
+    // Clear the O_NONBLOCK flag to make it blocking
+    flags &= ~O_NONBLOCK;
+    // Set the updated flags
+    if (fcntl(fd, F_SETFL, flags) < 0)
+        err_n_die("fcntl error");
+    return 0; // Success
+}
+
 void server_setup(int *server_socket, int server_port, int *epoll_fd)
 {
     struct sockaddr_in servaddr;
@@ -148,36 +162,29 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
 
 void readChunkFile(const char *chunkname, int connfd)
 {
-    printf("chuj, czy to sie wypisze?\n");
-    int fd;
-    int32_t bytes_read;
-    char buffer[MAXLINE + 1];
+    int fd, bytes_read;
+    int64_t chunk_size;
 
     if ((fd = open(chunkname, O_RDONLY)) == -1)
         err_n_die("open error");
 
-    if ((bytes_read = bulk_read(fd, buffer, MAXLINE)) == -1)
-        err_n_die("read error");
+    chunk_size = file_size(fd);
 
-    buffer[bytes_read] = '\0';
+    uint8_t* file_buf = (uint8_t *)malloc(chunk_size * sizeof(uint8_t));
 
+    if ((bytes_read = bulk_read(fd, file_buf, chunk_size)) !=  chunk_size)
+        err_n_die("putChunk read error");
+
+    printf("to ostatnie, bytes_read: %d\n", bytes_read);
+    set_fd_blocking(connfd); // tego bardzo nie chcemy !!!!!!!!!!!!!!!!!!!!
+    write_len_and_data(connfd, chunk_size, file_buf);
+    free(file_buf);
     close(fd);
-
-    printf("chuj, czy to sie wypisze2?\n");
-
-    write_len_and_data(connfd, bytes_read, buffer);
-
-    printf("chuj, czy to sie wypisze5?\n");
-
-    // int bytes_written;
-    // if ((bytes_written = write(connfd, buffer, bytes_read)) == -1)
-    //     err_n_die("write error");
-    // printf("should have sent bytes_read: %d, bytes_written: %d\n", bytes_read, bytes_written);
 }
 
 void processReadRequest(char *path, int id, int connfd)
 {
-    char chunkname[MAXLINE + 1];
+    char chunkname[MAX_FILENAME_LENGTH];
     snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
     readChunkFile(chunkname, connfd);
@@ -202,7 +209,7 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
 
 void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk)
 {
-    char chunkname[MAXLINE + 1];
+    char chunkname[MAX_FILENAME_LENGTH];
     snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk",
              replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
@@ -304,7 +311,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
     current_offset += sizeof(uint32_t);
 
     proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
-    memcpy(proto_buf, buffer + current_offset, proto_len);                   // here it's 18890640
+    memcpy(proto_buf, buffer + current_offset, proto_len);
     current_offset += proto_len;
 
     if (op_type == 'r')
@@ -335,12 +342,6 @@ void process_request(int epoll_fd, event_data_t *event_data)
         chunk_content_buf = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
         memcpy(chunk_content_buf, buffer + current_offset, chunk_content_len);
 
-        // n = bulk_read(connfd, &proto_len, sizeof(proto_len));
-        // proto_len = ntohl(proto_len);
-        // printf("proto_len: %d\n", proto_len);
-
-        // memset(recvline, 0, MAXLINE);
-        // n = bulk_read(connfd, recvline, proto_len);
 
         Chunk *chunk = chunk__unpack(NULL, proto_len, proto_buf);
 
@@ -358,16 +359,6 @@ void process_request(int epoll_fd, event_data_t *event_data)
                    chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
         }
 
-        // n = bulk_read(connfd, &buf_len, sizeof(buf_len));
-        // buf_len = ntohl(buf_len);
-        // printf("buf_len: %d\n", buf_len);
-
-        // memset(recvline, 0, MAXLINE);
-        // n = bulk_read(connfd, recvline, buf_len);
-
-        // printf("received chunk:\n%s\n", recvline);
-
-        // processWriteRequest("dummypath", chunk->chunk_id, recvline, buf_len, chunk);
         processWriteRequest(chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk);
 
         // chuj z replikacją (duplikacją)

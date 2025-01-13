@@ -3,6 +3,7 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,9 +20,7 @@
 
 // #define SERVER_PORT 18000
 
-#define MAXLINE 400096 // ADDITIONAL ZERO? // tested
-// #define MAXLINE 4000096
-#define MAX_FILENAME_LENGTH 200 // to be deleted
+#define MAX_FILENAME_LENGTH 201 // to be deleted
 //#define MASTER_ADDRESS "127.0.0.1"
 // #define MASTER_ADDRESS "server_container"
 // #define REPLICA_ADDRESS "replica_container"
@@ -77,6 +76,8 @@
 
 // #define CHUNK_SIZE 1000
 
+#define CHUNK_SIZE 32000000 // 32MB zabije
+
 #define MAX_THREADS_COUNT 1
 
 #define REPLICAS_COUNT 2
@@ -124,9 +125,10 @@ char *resolve_host(char *host_name);
 // void debug_log(int debugfd, const char *fmt, ...);
 void debug_log(FILE *debugfd, const char *fmt, ...);
 
-int bulk_read(int fd, char *buf, int count);
-int bulk_write(int fd, char *buf, int count);
-int bulk_write_nonblock(int fd, char *buf, int count);
+int bulk_read(int fd, void *buf, int count);
+// int bulk_write(int fd, void *buf, int count);
+ssize_t bulk_write(int fd, const void *buf, size_t count);
+int bulk_write_nonblock(int fd, void *buf, int count);
 
 void abort_with_cleanup(char *msg, int serverfd);
 int32_t read_payload_size(int serverfd);
@@ -135,4 +137,6 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data);
 
 void setup_connection(int *server_socket, char *ip, uint16_t port);
 int setup_connection_retry(int *server_socket, char *ip, uint16_t port);
+
+int64_t file_size(int filefd);
 #endif

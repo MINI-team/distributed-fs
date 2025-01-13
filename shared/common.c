@@ -88,7 +88,7 @@ void debug_log(FILE *debugfd, const char *fmt, ...)
     va_end(ap);
 }
 
-int bulk_read(int fd, char *buf, int count)
+int bulk_read(int fd, void *buf, int count)
 {
     int c;
     int len = 0;
@@ -106,25 +106,61 @@ int bulk_read(int fd, char *buf, int count)
     return len;
 }
 
-int bulk_write(int fd, char *buf, int count)
+// int bulk_write(int fd, void *buf, int count)
+// {
+//     printf("count: %d\n", count); //32000000
+//     int c;
+//     int len = 0;
+//     do
+//     {
+//         // c = TEMP_FAILURE_RETRY(write(fd, buf, count));
+//         c = write(fd, buf, count); // this return -1
+//         printf("tutaj c: %d\n", c);
+//         if (c < 0)
+//             return c;
+//         buf += c;
+//         len += c;
+//         count -= c;
+//     } while (count > 0);
+//     return len;
+// }
+
+ssize_t bulk_write(int fd, const void *buf, size_t count)
 {
-    int c;
-    int len = 0;
-    do
+    printf("count: %zu\n", count);
+
+    const unsigned char *p = buf;  // safer for pointer arithmetic
+    ssize_t total_written  = 0;
+
+    while (count > 0)
     {
-        c = TEMP_FAILURE_RETRY(write(fd, buf, count));
-        if (c < 0)
-            return c;
-        buf += c;
-        len += c;
-        count -= c;
-    } while (count > 0);
-    return len;
+        ssize_t c = write(fd, p, count);
+        if (c < 0) {
+            // If interrupted by a signal, you might want to continue
+            if (errno == EINTR) {
+                continue;  // just retry
+            }
+            // Otherwise, report error and return
+            fprintf(stderr, "write() failed: %s\n", strerror(errno));
+            return -1;
+        }
+        // c == 0 would mean no more can be written (e.g. broken pipe)
+        if (c == 0) {
+            fprintf(stderr, "No more data could be written.\n");
+            return total_written;
+        }
+        p             += c;
+        total_written += c;
+        count         -= c;
+    }
+    return total_written;
 }
+
+
 
 // write - blokujacy, zablokuje replike dopki client nie zrobi
 
-int bulk_write_nonblock(int fd, char *buf, int count)
+int bulk_write_nonblock(int fd, void *buf, int count)
 {
     int c;
     int len = 0;
@@ -192,16 +228,14 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data)
 {
     int net_len = htonl(len), sent;
 
-    printf("chuj, czy to sie wypisze3?\n");
     if((sent = bulk_write(fd, &net_len, sizeof(net_len))) != (int)sizeof(net_len))
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, (int)sizeof(net_len));
 
-    printf("chuj, czy to sie wypisze4?, len = %d\n", len);
     // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
     if ((sent = bulk_write(fd, data, len)) != len)
     {
-        printf("dupa\n");
+        printf("no i sie nie udalo\n");
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
@@ -259,4 +293,17 @@ int setup_connection_retry(int *server_socket, char *ip, uint16_t port)
     }
     
     return 0;
+}
+
+int64_t file_size(int filefd)
+{
+    struct stat file_stat;
+
+    if (fstat(filefd, &file_stat))
+    {
+        close(filefd);
+        err_n_die("fstat error");
+    }
+
+    return (int64_t)file_stat.st_size;
 }

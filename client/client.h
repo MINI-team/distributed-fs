@@ -2,7 +2,6 @@
 #define CLIENT_H
 
 #include "common.h"
-#include <sys/stat.h>
 
 #define OUTPUT_PATH "output.txt"
 #define CLIENT_DEBUG_PATH "client.log"

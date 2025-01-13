@@ -24,7 +24,7 @@ void writeChunkFile(const char *filepat, uint8_t *data, int length)
 
 void debug_chunk_write(char *path, int id, uint8_t *data, int length)
 {
-    char chunkname[MAXLINE + 1];
+    char chunkname[MAX_FILENAME_LENGTH + 1];
     snprintf(chunkname, sizeof(chunkname), "received_chunks/%s%d.chunk", 
         path, id);
     writeChunkFile(chunkname, data, length);
@@ -32,22 +32,11 @@ void debug_chunk_write(char *path, int id, uint8_t *data, int length)
 
 void *getChunk(void *voidPtr)
 {
-    int replicafd, net_len, ret = -1;
+    int replicafd, ret = -1;
     struct sockaddr_in repladdr;
-    size_t bytes_read, proto_len;
+    size_t bytes_read;
     argsThread_t *args = voidPtr;
-    char file_buf[MAXLINE + 1]; // MAXLINE to be reconsidered!!!!
     uint8_t op_type;
-
-    // if ((bytes_read = pread(args->filefd, file_buf, CHUNK_SIZE, args->offset)) < 0)
-    //     err_n_die("putChunk read error");
-
-    // int modulo = args->filesize % CHUNK_SIZE;
-    // if (bytes_read != CHUNK_SIZE && bytes_read != modulo)
-    //     err_n_die("for args->chunk_id: %d, putChunk pread bytes_read: %d, CHUNK_SIZE: %d\n, modulo: %d\n",
-    //               args->chunk_id, bytes_read, CHUNK_SIZE, modulo);
-
-    // file_buf[bytes_read] = '\0';
 
     ChunkRequest chunkRequest = CHUNK_REQUEST__INIT;
     chunkRequest.path = args->path;
@@ -57,15 +46,10 @@ void *getChunk(void *voidPtr)
     uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequest * sizeof(uint8_t));
     chunk_request__pack(&chunkRequest, proto_buf);
 
-    // uint32_t len_chunkRequest = chunk_request__get_packed_size(chunk_list_global->chunks[args->chunk_id]);
     uint32_t payload_size = sizeof(uint8_t) + sizeof(uint32_t) + len_chunkRequest;
     payload_size = htonl(payload_size);
     op_type = 'r';
 
-    // uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequest * sizeof(uint8_t));
-    // chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
-
-    printf("aha\n");
     for (int i = 0; i < args->n_replicas; i++)
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
@@ -75,9 +59,6 @@ void *getChunk(void *voidPtr)
 
     if (ret < 0)
         err_n_die("each replica is dead");
-
-
-    printf("hello\n");
 
     // setup_connection(&replicafd, args->ip, args->port);
     /*
@@ -97,77 +78,20 @@ void *getChunk(void *voidPtr)
 
     uint8_t *buffer = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
     if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
-        err_n_die("bulk_read error for chunk_id: %d, bytes_written: %d, payload: %d\n", args->chunk_id, bytes_read , chunk_content_len);
+        err_n_die("bulk_read error for chunk_id: %d, bytes_read: %d, payload: %d\n", args->chunk_id, bytes_read , chunk_content_len); // here my app crashes
 
     int pw_bytes_written;
     if ((pw_bytes_written = pwrite(args->filefd, buffer, chunk_content_len, args->offset)) < 0)
         err_n_die("pwrite error");
 
     close(replicafd);
+
+    return NULL;
 }
-// {
-//     // printf("bull\n");
-//     int serverfd, bytes_read;
-//     struct sockaddr_in servaddr;
-//     char chunk[CHUNK_SIZE+1];
-//     uint8_t op_type[MAXLINE];
-
-//     argsThread_t *args = voidPtr;
-//     // printf("[tid: %lu] chunk_id: %d\n", pthread_self(), args->chunk_id);
-
-//     strcpy(op_type, "read");
-
-//     ChunkRequest chunkRequest = CHUNK_REQUEST__INIT;
-//     chunkRequest.path = args->path;
-//     chunkRequest.chunk_id = args->chunk_id;
-
-//     int len = chunk_request__get_packed_size(&chunkRequest);
-//     uint8_t *buffer = (uint8_t *)malloc(len * sizeof(uint8_t));
-//     chunk_request__pack(&chunkRequest, buffer);
-
-//     // printf("bull2\n");
-//     setup_connection(&serverfd, args->ip, args->port); 
-//     // if ((serverfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-//     //     err_n_die("socket error");
-
-//     // memset(&servaddr, 0, sizeof(servaddr));
-//     // servaddr.sin_family = AF_INET;
-//     // servaddr.sin_port = htons(args->port);
-
-//     // if (inet_pton(AF_INET, args->ip, &servaddr.sin_addr) <= 0)
-//     //     err_n_die("inet_pton error for %s", args->ip);
-
-//     // if (connect(serverfd, (SA *)&servaddr, sizeof(servaddr)) < 0)
-//     //     err_n_die("connect error");
-//     // printf("bull3\n");
-
-//     int net_len = htonl(len); // refactoring!
-//     write(serverfd, &net_len, sizeof(net_len));
-
-//     write_len_and_data(serverfd, strlen(op_type) + 1, op_type);
-//     write_len_and_data(serverfd, len, buffer);
-
-//     free(buffer);
-//     int32_t payload = read_payload_size(serverfd);
-
-//     int32_t bytes_written;
-//     buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
-//     if ((bytes_written = bulk_read(serverfd, buffer, payload)) != payload)
-//         err_n_die("bulk_read error for chunk_id: %d, bytes_written: %d, payload: %d\n", args->chunk_id, bytes_written, payload);
-    
-//     int pw_bytes_written;
-//     if ((pw_bytes_written = pwrite(args->filefd, buffer, payload, args->offset)) < 0)
-//         err_n_die("pwrite error");
-
-//     close(serverfd);
-//     // printf("bull4\n");
-// }
 
 void do_read(char *path)
 {
     int                 serverfd, filefd, n, err, bytes_read;
-    struct sockaddr_in  servaddr;
-    char                recvline[MAXLINE];
 
     if ((filefd = open(OUTPUT_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
@@ -187,17 +111,8 @@ void do_read(char *path)
 
     free(buffer);
 
-    int32_t total_bytes_read = 0;
-    int32_t payload = read_payload_size(serverfd);
-
-    buffer = (uint8_t *)malloc(payload * sizeof(uint8_t));
-
-    while (total_bytes_read < payload)
-    {
-        if ((bytes_read = read(serverfd, buffer + total_bytes_read, payload)) < 0)
-            err_n_die("read error");
-        total_bytes_read += bytes_read;
-    }
+    int32_t payload;
+    read_paylaod_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunkList = chunk_list__unpack(NULL, payload, buffer);
     if (!chunkList)
@@ -220,11 +135,8 @@ void do_read(char *path)
 
             threads[i].chunk_id = index;
             threads[i].path = path;
-            // threads[i].ip = (char **)malloc(n_replicas * sizeof(char*));
             threads[i].n_replicas = chunkList->chunks[index]->n_replicas;
             threads[i].replicas = chunkList->chunks[index]->replicas;
-            // threads[i].ip = chunkList->chunks[index]->replicas[0]->ip;
-            // threads[i].port = chunkList->chunks[index]->replicas[0]->port;
             
             threads[i].offset = (int64_t)index * CHUNK_SIZE;
             threads[i].filefd = filefd;
@@ -251,13 +163,16 @@ void do_read(char *path)
 
 void *putChunk(void *voidPtr)
 {
+    int k;
     // printf("hello\n");
     int replicafd, net_len, ret = -1;
     struct sockaddr_in repladdr;
     size_t bytes_read, proto_len;
     argsThread_t *args = voidPtr;
-    char file_buf[MAXLINE + 1]; // MAXLINE to be reconsidered!!!!
+    // char file_buf[CHUNK_SIZE + 1]; 
     uint8_t op_type;
+
+    uint8_t* file_buf = (uint8_t *)malloc(CHUNK_SIZE * sizeof(uint8_t));
 
     if ((bytes_read = pread(args->filefd, file_buf, CHUNK_SIZE, args->offset)) < 0)
         err_n_die("putChunk read error");
@@ -307,6 +222,8 @@ void *putChunk(void *voidPtr)
     write_len_and_data(replicafd, bytes_read, file_buf);
 
     close(replicafd);
+
+    return NULL;
 }
 
 void do_write(char *path)
@@ -335,7 +252,6 @@ void do_write(char *path)
 
     free(buffer);
 
-
     int32_t payload;
     read_paylaod_and_data(serverfd, &buffer, &payload);
 
@@ -345,7 +261,7 @@ void do_write(char *path)
 
     chunk_list_global = chunk_list;
 
-    // close serverfd??
+    close(serverfd);
 
 #ifdef DEBUG
     debug_log(debugfd, "chunk_list->n_chunks: %d\n", chunk_list->n_chunks);
@@ -419,17 +335,4 @@ int main(int argc, char **argv)
         do_write(argv[2]);
     else
         err_n_die("usage: wrong client request");
-}
-
-int64_t file_size(int filefd)
-{
-    struct stat file_stat;
-
-    if (fstat(filefd, &file_stat))
-    {
-        close(filefd);
-        err_n_die("fstat error");
-    }
-
-    return (int64_t)file_stat.st_size;
 }
