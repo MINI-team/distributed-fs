@@ -25,6 +25,20 @@ typedef struct argsThread
 
 } argsThread_t;
 
+typedef struct thread_pool_args
+{
+    pthread_mutex_t *mutex;
+    pthread_cond_t *cond_main_to_threads;
+    pthread_cond_t *cond_thread_to_main;   
+
+    int current_chunk;
+    argsThread_t *argsThread;
+    bool work_taken;
+    bool work_finished;
+    void (*process_chunk)(void *); // put_chunk or get_chunk
+
+} thread_pool_args_t;
+
 int64_t file_size(int filefd);
 
 #endif
