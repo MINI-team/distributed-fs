@@ -51,3 +51,8 @@ message CommitChunk {
     repeated Replica replicas_success = 3;
     repeated Replica replicas_fail = 4;
 }
+
+message NewReplica {
+    string ip = 1;
+    int32 port = 2;
+}
