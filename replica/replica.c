@@ -8,6 +8,7 @@
 #include "dfs.pb-c.h"
 
 int replica_port = 8080;
+char replica_ip[IP_LENGTH] = "127.0.0.1";
 
 #define MAX_EVENTS 4096
 #define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
@@ -528,15 +529,87 @@ void handle_client(int epoll_fd, event_data_t *event_data)
         err_n_die("undefined");
 }
 
+void register_to_master(int epoll_fd)
+{
+    int success = 1, masterfd, ret;
+    uint32_t proto_len, proto_net_len;
+    uint8_t op_type = 'n';
+
+    NewReplica replica = NEW_REPLICA__INIT;
+    replica.ip = replica_ip;
+    replica.port = replica_port;
+
+    proto_len = new_replica__get_packed_size(&replica);
+    uint8_t *proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
+    new_replica__pack(&replica, proto_buf);
+
+    // buffer[0] = 'n';
+
+    ret = setup_connection_retry(&masterfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    if (ret < 0)
+    {
+        printf("skipping this replica\n");
+        err_n_die("couldn't connect to master");
+    }
+    // setup_connection(&masterfd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
+    set_fd_nonblocking(masterfd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    event_data_t *event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!event_data)
+        err_n_die("malloc error");
+
+    client_data_t *client_data = (client_data_t *)malloc(sizeof(client_data_t));
+    if (!client_data)
+        err_n_die("malloc error");
+
+    event_data->client_data = client_data;
+    event_data->client_data->buffer = NULL;
+    event_data->client_data->client_socket = masterfd;
+    event_data->is_server = false;
+
+    proto_net_len = htonl(proto_len);
+    int32_t master_payload_size = sizeof(uint8_t) + proto_len;
+    int32_t out_payload_size = sizeof(uint32_t) + master_payload_size;
+    int32_t net_master_payload_size = htonl(master_payload_size);
+    event_data->client_data->out_payload_size = out_payload_size;
+    event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+    
+    memcpy(event_data->client_data->out_buffer, &net_master_payload_size, sizeof(uint32_t));
+    event_data->client_data->out_buffer[sizeof(uint32_t)] = op_type;
+    // memcpy(event_data->client_data->out_buffer + sizeof(uint32_t) + sizeof(uint8_t), &proto_net_len, sizeof(uint32_t));
+    memcpy(event_data->client_data->out_buffer + sizeof(uint32_t) + sizeof(uint8_t), proto_buf, proto_len);
+
+    event_data->client_data->bytes_sent = 0;
+    event_data->client_data->left_to_send = out_payload_size;
+
+    printf("payload_size=%d\n", out_payload_size);
+
+    struct epoll_event event;
+    event.events = EPOLLOUT;
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, masterfd, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
+}
+
 int main(int argc, char **argv)
 {
     int server_socket, epoll_fd, running = 1;
     struct epoll_event events[MAX_EVENTS];
 
-    if (argc >= 2)
+    if (argc >= 3) // ./replica ip port
+    {
+        // replica_ip = argv[1];
+        strcpy(replica_ip, argv[1]);
+        replica_port = atoi(argv[2]);
+    }
+    else if (argc == 2) // ./replica port
+    {
         replica_port = atoi(argv[1]);
-
+    }
+        
     server_setup(&server_socket, replica_port, &epoll_fd);
+    register_to_master(epoll_fd);
 
     while (running)
     {

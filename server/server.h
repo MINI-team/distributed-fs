@@ -40,8 +40,8 @@ void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event);
 void handle_new_connection(int epoll_fd, int server_socket);
 
 /* Existing clients */
-void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTable *hash_table);
-void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **all_replicas, GHashTable *hash_table);
-void handle_client(int epoll_fd, event_data_t *event_data,replica_info_t **all_replicas, GHashTable *hash_table);
+void add_file(char *path, int64_t size, int replicas_count, replica_info_t **all_replicas, GHashTable *hash_table);
+void process_request(int epoll_fd, event_data_t *event_data, int *replica_count, replica_info_t **all_replicas, GHashTable *hash_table);
+void handle_client(int epoll_fd, event_data_t *event_data, int *replica_count, replica_info_t **all_replicas, GHashTable *hash_table);
 
 #endif

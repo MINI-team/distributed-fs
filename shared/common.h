@@ -82,7 +82,7 @@
 
 #define MAX_THREADS_COUNT 16
 
-#define REPLICAS_COUNT 2
+#define REPLICATION_FACTOR 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr

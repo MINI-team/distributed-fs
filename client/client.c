@@ -58,7 +58,8 @@ void get_chunk(void *voidPtr)
     for (int i = 0; i < args->n_replicas; i++)
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            printf("i:%d\n", i);
+            printf("\n=============================\nConnected to replica %d\n===================================\n",
+             args->replicas[i]->port);
             break;
         }
 

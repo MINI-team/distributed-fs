@@ -412,6 +412,51 @@ void   commit_chunk__free_unpacked
   assert(message->base.descriptor == &commit_chunk__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   new_replica__init
+                     (NewReplica         *message)
+{
+  static const NewReplica init_value = NEW_REPLICA__INIT;
+  *message = init_value;
+}
+size_t new_replica__get_packed_size
+                     (const NewReplica *message)
+{
+  assert(message->base.descriptor == &new_replica__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t new_replica__pack
+                     (const NewReplica *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &new_replica__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t new_replica__pack_to_buffer
+                     (const NewReplica *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &new_replica__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+NewReplica *
+       new_replica__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (NewReplica *)
+     protobuf_c_message_unpack (&new_replica__descriptor,
+                                allocator, len, data);
+}
+void   new_replica__free_unpacked
+                     (NewReplica *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &new_replica__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor file_request_read__field_descriptors[1] =
 {
   {
@@ -934,5 +979,56 @@ const ProtobufCMessageDescriptor commit_chunk__descriptor =
   commit_chunk__field_indices_by_name,
   1,  commit_chunk__number_ranges,
   (ProtobufCMessageInit) commit_chunk__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor new_replica__field_descriptors[2] =
+{
+  {
+    "ip",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(NewReplica, ip),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "port",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(NewReplica, port),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned new_replica__field_indices_by_name[] = {
+  0,   /* field[0] = ip */
+  1,   /* field[1] = port */
+};
+static const ProtobufCIntRange new_replica__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor new_replica__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "NewReplica",
+  "NewReplica",
+  "NewReplica",
+  "",
+  sizeof(NewReplica),
+  2,
+  new_replica__field_descriptors,
+  new_replica__field_indices_by_name,
+  1,  new_replica__number_ranges,
+  (ProtobufCMessageInit) new_replica__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

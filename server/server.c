@@ -11,26 +11,6 @@
 
 #define MAX_EVENTS 10
 
-void setupReplicas(Replica **replicas)
-{
-    // char* replica_ip = resolve_host(REPLICA_ADDRESS);
-    replicas[0] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[0]);
-    replicas[0]->ip = "127.0.0.1";
-    // replicas[0]->ip = replica_ip;
-    replicas[0]->port = 8080;
-
-    replicas[1] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[1]);
-    replicas[1]->ip = "127.0.0.1";
-    // replicas[1]->ip = replica_ip;
-    replicas[1]->port = 8081;
-    
-    replicas[2] = (Replica *)malloc(sizeof(Replica));
-    replica__init(replicas[2]);
-    // replicas[2]->ip = "127.0.0.1";
-    replicas[2]->port = 8082;
-}
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
@@ -102,7 +82,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     free(buffer);
 }
 
-void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTable *hash_table)
+void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
@@ -121,11 +101,11 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
         chunk->chunk_id = i;
         chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
         strcpy(chunk->path, path);
-        chunk->n_replicas = 3;
-        chunk->replicas = (Replica **)malloc(3 * sizeof(Replica *));
+        chunk->n_replicas = REPLICATION_FACTOR;
+        chunk->replicas = (Replica **)malloc(REPLICATION_FACTOR * sizeof(Replica *));
 
-        // Replica *replicas[3];
-        for (int j = 0; j < 3; j++)
+        // Replica *replicas[REPLICATION_FACTOR];
+        for (int j = 0; j < REPLICATION_FACTOR; j++)
         {
             
             Replica *replica = (Replica *)malloc(sizeof(Replica));
@@ -135,26 +115,29 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
             // rand_ind = 0;
             // rand_ind = i % 2;
 
-            if (j == 0 || j == 1)
-                rand_ind = i % 2;
-            if (j == 2)
-                rand_ind = (i+1) % 2;
+            // if (j == 0 || j == 1)
+            //     rand_ind = i % 2;
+            // if (j == 2)
+            //     rand_ind = (i+1) % 2;
             
             // if (j == 0 || j == 1)
             //     rand_ind = 0;
             // if (j == 2)
             //     rand_ind = 1;
 
-            // else
-            //     rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
+            // NIE JEBANY RAND - MOŻE ON DAĆ TĘ SAMĄ REPLIKĘ JAKO WSZYSTKIE REPLIKI DANEGO CHUNKU
+            if (j == 0)
+                rand_ind = i % replicas_count;
+            if (j == 1)
+                rand_ind = (i + 1) % replicas_count;
 
-            // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);
             replica->port = all_replicas[rand_ind]->port;
             replica->is_primary = (j == 0);
 
             chunk->replicas[j] = replica;
+            printf("Chunkowi %d przeydzielono replike %d\n", i, all_replicas[rand_ind]->port);
         }
         
         chunk_list->chunks[i] = chunk;
@@ -163,9 +146,12 @@ void add_file(char* path, int64_t size, replica_info_t **all_replicas, GHashTabl
     g_hash_table_insert(hash_table, strdup(path), chunk_list);
 }
 
-void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **all_replicas, GHashTable *hash_table)
+void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     char request_type = event_data->client_data->buffer[0];
+
+    printf("request type: %c\n", request_type);
+
     if (request_type == 'w')
     {
         printf("write request detected \n");
@@ -180,7 +166,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
             err_n_die("ups");
         printf("fileRequestWrite->path: %s\n", fileRequestWrite->path);
         printf("fileRequestWrite->size: %ld\n", fileRequestWrite->size);
-        add_file(fileRequestWrite->path, fileRequestWrite->size, all_replicas, hash_table);
+        add_file(fileRequestWrite->path, fileRequestWrite->size, *replicas_count, all_replicas, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
@@ -209,6 +195,24 @@ void process_request(int epoll_fd, event_data_t *event_data, replica_info_t **al
         {
             printf("not found \n");
         }
+    }
+    else if(request_type == 'n')
+    {
+        printf("new replica request detected \n");
+        NewReplica *replica = new_replica__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+
+        printf("ip: %s\n", replica->ip);
+        printf("port: %d\n", replica->port);
+        // calloc()
+        all_replicas[*replicas_count] = (replica_info_t *)malloc(sizeof(replica_info_t));
+        all_replicas[*replicas_count]->ip = (char *)malloc(IP_LENGTH * sizeof(char)); // Allocating memory for IP
+
+        strcpy(all_replicas[*replicas_count]->ip, replica->ip);
+        all_replicas[*replicas_count]->port = replica->port;
+        
+        (*replicas_count)++;
+
+        printf("new replica added\n");
     }
     else
     {
@@ -304,7 +308,7 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     printf("Client configured, declared payload size: %d bytes\n", event_data->client_data->payload_size);
 }
 
-void handle_client(int epoll_fd, event_data_t *event_data, replica_info_t **all_replicas, GHashTable *hash_table)
+void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
 {
     int client_socket = event_data->client_data->client_socket;
     int bytes_read;
@@ -333,7 +337,7 @@ void handle_client(int epoll_fd, event_data_t *event_data, replica_info_t **all_
     event_data->client_data->bytes_stored += bytes_read;
 
     if (event_data->client_data->bytes_stored == event_data->client_data->payload_size)
-        process_request(epoll_fd, event_data, all_replicas, hash_table);
+        process_request(epoll_fd, event_data, replicas_count, all_replicas, hash_table);
     else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size)    /*multi-queries clients - TODO*/
         err_n_die("undefined");
 }
@@ -345,12 +349,12 @@ int main()
     int                 server_socket;
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
-    replica_info_t      *all_replicas[5]; // these are all replicas master knows
+    int                 replicas_count = 0;
+    replica_info_t      *all_replicas[1000]; // these are all replicas master knows
 
 
-    initialize_demo_replicas(all_replicas);
+    // initialize_demo_replicas(all_replicas);
     server_setup(&server_socket, &epoll_fd, &event);
-
 
     while (running) 
     {
@@ -375,7 +379,7 @@ int main()
                 if (events[i].events & EPOLLIN)
                 {
                     printf("client event EPOLLIN triggered\n");
-                    handle_client(epoll_fd, event_data, all_replicas, hash_table);
+                    handle_client(epoll_fd, event_data, &replicas_count, all_replicas, hash_table);
                 }
                 else if (events[i].events & EPOLLOUT)
                 {
@@ -391,46 +395,6 @@ int main()
     }
     close(epoll_fd);
     close(server_socket);
-}
-
-void initialize_demo_replicas(replica_info_t **all_replicas)
-{
-    for (int i = 0; i < 5; i++) {
-        all_replicas[i] = (replica_info_t *)malloc(sizeof(replica_info_t));
-        all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
-    }
-
-#ifdef DOCKER
-    strcpy(all_replicas[0]->ip, resolve_host(REPLICA_SERVER_IP_0));
-    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
-
-    strcpy(all_replicas[1]->ip, resolve_host(REPLICA_SERVER_IP_1));
-    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
-
-    strcpy(all_replicas[2]->ip, resolve_host(REPLICA_SERVER_IP_2));
-    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
-
-    strcpy(all_replicas[3]->ip, resolve_host(REPLICA_SERVER_IP_3));
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
-
-    strcpy(all_replicas[4]->ip, resolve_host(REPLICA_SERVER_IP_4));
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
-#else
-    strcpy(all_replicas[0]->ip, REPLICA_SERVER_IP_0);
-    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
-
-    strcpy(all_replicas[1]->ip, REPLICA_SERVER_IP_1);
-    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
-
-    strcpy(all_replicas[2]->ip, REPLICA_SERVER_IP_2);
-    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
-
-    strcpy(all_replicas[3]->ip, REPLICA_SERVER_IP_3);
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
-
-    strcpy(all_replicas[4]->ip, REPLICA_SERVER_IP_4);
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
-#endif
 }
 
 void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
