@@ -1,5 +1,3 @@
-#pragma once
-
 #include <stdio.h>
 #include <glib.h>
 #include <malloc.h>
@@ -8,7 +6,6 @@
 #include <string.h>
 #include "common.h"
 #include "dfs.pb-c.h"
-#include <unistd.h>
 
 int replica_port = 8080;
 char replica_ip[IP_LENGTH] = "127.0.0.1";

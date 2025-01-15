@@ -11,26 +11,6 @@
 
 #define MAX_EVENTS 10
 
-// void setupReplicas(Replica **replicas)
-// {
-//     // char* replica_ip = resolve_host(REPLICA_ADDRESS);
-//     replicas[0] = (Replica *)malloc(sizeof(Replica));
-//     replica__init(replicas[0]);
-//     replicas[0]->ip = "127.0.0.1";
-//     // replicas[0]->ip = replica_ip;
-//     replicas[0]->port = 8080;
-
-//     replicas[1] = (Replica *)malloc(sizeof(Replica));
-//     replica__init(replicas[1]);
-//     replicas[1]->ip = "127.0.0.1";
-//     // replicas[1]->ip = replica_ip;
-//     replicas[1]->port = 8081;
-    
-//     replicas[2] = (Replica *)malloc(sizeof(Replica));
-//     replica__init(replicas[2]);
-//     // replicas[2]->ip = "127.0.0.1";
-//     replicas[2]->port = 8082;
-// }
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
@@ -121,11 +101,11 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
         chunk->chunk_id = i;
         chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
         strcpy(chunk->path, path);
-        chunk->n_replicas = 3;
-        chunk->replicas = (Replica **)malloc(3 * sizeof(Replica *));
+        chunk->n_replicas = REPLICATION_FACTOR;
+        chunk->replicas = (Replica **)malloc(REPLICATION_FACTOR * sizeof(Replica *));
 
-        // Replica *replicas[3];
-        for (int j = 0; j < 3; j++)
+        // Replica *replicas[REPLICATION_FACTOR];
+        for (int j = 0; j < REPLICATION_FACTOR; j++)
         {
             
             Replica *replica = (Replica *)malloc(sizeof(Replica));
@@ -145,17 +125,19 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
             // if (j == 2)
             //     rand_ind = 1;
 
-            // else
-                // rand_ind = rand() % (REPLICAS_COUNT - 1) + 1;
-                rand_ind = rand() % replicas_count;
+            // NIE JEBANY RAND - MOŻE ON DAĆ TĘ SAMĄ REPLIKĘ JAKO WSZYSTKIE REPLIKI DANEGO CHUNKU
+            if (j == 0)
+                rand_ind = i % replicas_count;
+            if (j == 1)
+                rand_ind = (i + 1) % replicas_count;
 
-            // printf("rand_ind: %d \n", rand_ind);
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);
             replica->port = all_replicas[rand_ind]->port;
             replica->is_primary = (j == 0);
 
             chunk->replicas[j] = replica;
+            printf("Chunkowi %d przeydzielono replike %d\n", i, all_replicas[rand_ind]->port);
         }
         
         chunk_list->chunks[i] = chunk;
@@ -374,7 +356,6 @@ int main()
     // initialize_demo_replicas(all_replicas);
     server_setup(&server_socket, &epoll_fd, &event);
 
-
     while (running) 
     {
         printf("\n Server polling for events \n");
@@ -414,46 +395,6 @@ int main()
     }
     close(epoll_fd);
     close(server_socket);
-}
-
-void initialize_demo_replicas(replica_info_t **all_replicas)
-{
-    for (int i = 0; i < 5; i++) {
-        all_replicas[i] = (replica_info_t *)malloc(sizeof(replica_info_t));
-        all_replicas[i]->ip = (char *)malloc(16 * sizeof(char)); // Allocating memory for IP
-    }
-
-#ifdef DOCKER
-    strcpy(all_replicas[0]->ip, resolve_host(REPLICA_SERVER_IP_0));
-    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
-
-    strcpy(all_replicas[1]->ip, resolve_host(REPLICA_SERVER_IP_1));
-    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
-
-    strcpy(all_replicas[2]->ip, resolve_host(REPLICA_SERVER_IP_2));
-    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
-
-    strcpy(all_replicas[3]->ip, resolve_host(REPLICA_SERVER_IP_3));
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
-
-    strcpy(all_replicas[4]->ip, resolve_host(REPLICA_SERVER_IP_4));
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
-#else
-    strcpy(all_replicas[0]->ip, REPLICA_SERVER_IP_0);
-    all_replicas[0]->port = REPLICA_SERVER_PORT_0;
-
-    strcpy(all_replicas[1]->ip, REPLICA_SERVER_IP_1);
-    all_replicas[1]->port = REPLICA_SERVER_PORT_1;
-
-    strcpy(all_replicas[2]->ip, REPLICA_SERVER_IP_2);
-    all_replicas[2]->port = REPLICA_SERVER_PORT_2;
-
-    strcpy(all_replicas[3]->ip, REPLICA_SERVER_IP_3);
-    all_replicas[3]->port = REPLICA_SERVER_PORT_3;
-
-    strcpy(all_replicas[4]->ip, REPLICA_SERVER_IP_4);
-    all_replicas[4]->port = REPLICA_SERVER_PORT_4;
-#endif
 }
 
 void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
