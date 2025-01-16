@@ -259,7 +259,7 @@ void write_to_disk(const char *filepat, uint8_t *data, int length)
     close(fd);
 }
 
-void prepare_acknowledgement(event_data_t *event_data)
+void prepare_local_write_ack(int epoll_fd, event_data_t *event_data, peer_type_t peer_type)
 {
     // prepare protobuf message, pack it to proto_buf, 
     // prepare old epoll event for writing with payload and packed message
@@ -278,9 +278,22 @@ void prepare_acknowledgement(event_data_t *event_data)
     int32_t out_payload_size = sizeof(uint32_t) + proto_len;
     event_data->peer_data->out_payload_size = out_payload_size;
     event_data->peer_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+
+    memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
+    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
+    event_data->peer_data->bytes_sent = 0;
+    event_data->peer_data->left_to_send = out_payload_size;
+    event_data->peer_type = peer_type;
+
+    struct epoll_event event;
+    event.events = EPOLLOUT;
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
 }
 
-void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *chunk, 
+void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int length, Chunk *chunk, 
                          peer_type_t peer_type, event_data_t *event_data)
 {
     char chunkname[MAX_FILENAME_LENGTH];
@@ -288,12 +301,9 @@ void processWriteRequest(char *path, int id, uint8_t *data, int length, Chunk *c
              replica_port, path, id);
     printf("chunkname: %s\n", chunkname);
     write_to_disk(chunkname, data, length);
+
+    prepare_local_write_ack(epoll_fd, event_data, peer_type);
 }
-
-// void setup_outbound(int epoll_fd, )
-// {
-
-// }
 
 int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffer)
 {
@@ -469,7 +479,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         peer_type_t peer_type = op_type == 'w' ? CLIENT_WRITE : REPLICA_PRIMO;
 
-        processWriteRequest(chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk, 
+        processWriteRequest(epoll_fd, chunk->path, chunk->chunk_id, chunk_content_buf, chunk_content_len, chunk, 
                             peer_type, event_data);
 
         if (op_type == 'w')

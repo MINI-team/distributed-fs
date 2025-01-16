@@ -80,8 +80,8 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-// #define MAX_THREADS_COUNT 16
-#define MAX_THREADS_COUNT 1
+#define MAX_THREADS_COUNT 16
+// #define MAX_THREADS_COUNT 1
 
 #define REPLICATION_FACTOR 2
 

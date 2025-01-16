@@ -157,10 +157,32 @@ void put_chunk(void *voidPtr)
 
     write_len_and_data(replicafd, bytes_read, file_buf);
 
-    close(replicafd);
+    // close(replicafd);
 
     free(file_buf);
     free(proto_buf);
+
+    printf("Waiting for commit\n");
+    uint32_t payload;
+    uint8_t *buffer;
+    // alert(5);
+
+    // for (int i = 0; i < REPLICATION_FACTOR; i++) BRING THIS BACK <-------------------------------------
+    // --------------------------------------------------------------------------
+    // --------------------------------------------------------------------------
+    for (int i = 0; i < 1; i++)
+    {
+        read_paylaod_and_data(replicafd, &buffer, &payload);
+        ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
+        if (chunk_commit_report->is_success)
+            printf("Received chunk commit report, success for IP: %s, port: %d\n",
+                   chunk_commit_report->ip, chunk_commit_report->port);
+        else
+            printf("Received chunk commit report, fail for IP:%s, port: %d\n",
+                   chunk_commit_report->ip, chunk_commit_report->port);
+    }
+    // w tym momencie, u repliki bedzie striggerowany EPOLLIN dla klienta i bytes_read = 0
+    close(replicafd);
 }
 
 
