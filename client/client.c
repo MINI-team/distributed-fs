@@ -170,16 +170,16 @@ void put_chunk(void *voidPtr)
     // for (int i = 0; i < REPLICATION_FACTOR; i++) BRING THIS BACK <-------------------------------------
     // --------------------------------------------------------------------------
     // --------------------------------------------------------------------------
-    for (int i = 0; i < 1; i++)
+    for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
         read_paylaod_and_data(replicafd, &buffer, &payload);
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
-            printf("Received chunk commit report, success for IP: %s, port: %d\n",
-                   chunk_commit_report->ip, chunk_commit_report->port);
+            printf("Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
+                   i, chunk_commit_report->ip, chunk_commit_report->port);
         else
-            printf("Received chunk commit report, fail for IP:%s, port: %d\n",
-                   chunk_commit_report->ip, chunk_commit_report->port);
+            printf("Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
+                   i, chunk_commit_report->ip, chunk_commit_report->port);
     }
     // w tym momencie, u repliki bedzie striggerowany EPOLLIN dla klienta i bytes_read = 0
     close(replicafd);

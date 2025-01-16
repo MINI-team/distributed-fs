@@ -79,8 +79,8 @@ void handle_new_connection(int epoll_fd, int server_socket)
         return;
     }
 
-    event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
-    if (!client_event_data)
+    event_data_t *peer_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!peer_event_data)
         err_n_die("malloc error");
 
     peer_data_t *peer_data = (peer_data_t *)malloc(sizeof(peer_data_t));
@@ -95,12 +95,12 @@ void handle_new_connection(int epoll_fd, int server_socket)
     peer_data->reading_started = false;
     peer_data->out_buffer = NULL;
 
-    client_event_data->is_server = 0;
-    client_event_data->peer_data = peer_data;
+    peer_event_data->is_server = 0;
+    peer_event_data->peer_data = peer_data;
 
     struct epoll_event event;
     event.events = EPOLLIN;
-    event.data.ptr = client_event_data;
+    event.data.ptr = peer_event_data;
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
         err_n_die("epoll_ctl error");
@@ -216,20 +216,77 @@ void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname
     close(fd);
 }
 
-
-void write_to_peer(int epoll_fd, event_data_t *client_event_data)
+// prepare to listen for acknowledgement from secondary (and tertiary) replicas
+void prepare_to_listen_for_ack(int epoll_fd, event_data_t *event_data)
 {
-    int bytes_written = bulk_write_nonblock(client_event_data->peer_data->client_socket,
-        client_event_data->peer_data->out_buffer,
-        &(client_event_data->peer_data->bytes_sent),
-        &(client_event_data->peer_data->left_to_send)
+    peer_data_t *peer_data = event_data->peer_data;
+
+    if (peer_data->out_buffer)
+        free(peer_data->out_buffer);
+    else
+        err_n_die("out_buffer was NULL");
+
+    peer_data->buffer = (uint8_t *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(uint8_t));
+    peer_data->payload_size = 0;
+    peer_data->bytes_stored = 0;
+    peer_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
+    peer_data->reading_started = false;
+    peer_data->out_buffer = NULL;
+
+    struct epoll_event event;
+    event.events = EPOLLIN;
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, peer_data->client_socket, &event))
+        err_n_die("epoll_ctl error");
+}
+
+void write_to_peer(int epoll_fd, event_data_t *event_data)
+{
+    peer_type_t peer_type = event_data->peer_type;
+
+    int bytes_written = bulk_write_nonblock(event_data->peer_data->client_socket,
+        event_data->peer_data->out_buffer,
+        &(event_data->peer_data->bytes_sent),
+        &(event_data->peer_data->left_to_send)
     );
-    printf("poszlo bytes_written: %d, w sumie wyslano: %d\n", bytes_written, client_event_data->peer_data->bytes_sent);
+    printf("poszlo bytes_written: %d, w sumie wyslano: %d\n", bytes_written, event_data->peer_data->bytes_sent);
 
     if (bytes_written == -1)
         return;
-    if (bytes_written == client_event_data->peer_data->out_payload_size)
-        disconnect_client(epoll_fd, client_event_data, client_event_data->peer_data->client_socket);
+    if (bytes_written == event_data->peer_data->out_payload_size)
+    {
+        switch (peer_type)
+        {
+        case CLIENT_READ:
+        case MASTER:
+        case REPLICA_PRIMO:
+            disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
+            break;
+        case CLIENT_WRITE:
+            // na razie nie zamykamy (powinnismy zamknac, jak trzy repliki zapisza)
+            if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->peer_data->client_socket, NULL) < 0)
+                err_n_die("unable to del");
+            break;
+
+        case REPLICA_SECUNDO:
+            // nie zamykamy socketu, zamieniamy na EPOLLIN
+            // EPOLLOUT -> EPOLLIN
+            // struct epoll_event event;
+            // event.events = EPOLLIN;
+            // event.data.ptr = event_data;
+            // if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
+            //     err_n_die("unable to add EPOLLOUT");
+
+            prepare_to_listen_for_ack(epoll_fd, event_data);
+            break;
+
+        default:
+            err_n_die("peer_type is probably EL_PRIMO");
+            break;
+        }
+    }
+
     else
         err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
 }
@@ -305,7 +362,7 @@ void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int le
     prepare_local_write_ack(epoll_fd, event_data, peer_type);
 }
 
-int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffer)
+int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffer, event_data_t *true_client_event_data)
 {
     // if (replica_port == 8081)
     //     err_n_die("test exit");
@@ -347,11 +404,15 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
         peer_data_t *peer_data = (peer_data_t *)malloc(sizeof(peer_data_t));
         if (!peer_data)
             err_n_die("malloc error");
-        
+
         event_data->peer_data = peer_data;
         event_data->peer_data->buffer = NULL;
         event_data->peer_data->client_socket = replicafd;
         event_data->is_server = false;
+        event_data->peer_type = REPLICA_SECUNDO;
+
+        // event_data->peer_data->true_client_socket = true_client_socket;
+        event_data->peer_data->true_client_event_data = true_client_event_data;
 
         uint32_t chunk_net_size = htonl(chunk_size);
         int32_t out_payload_size = sizeof(uint32_t) + chunk_size;
@@ -370,21 +431,6 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
 
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, replicafd, &event) < 0)
             err_n_die("unable to add EPOLLOUT");
-        
-
-        // write_len_and_data(replicafd, payload_size, buffer); // to jest do wyjebania
-
-        // printf("before reading ack char\n");
-
-        // uncomment this !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-        // read(replicafd, &recvchar, 1); // to jest  do wyjebania
-
-        // printf("after reading ack char\n");
-
-        // if (recvchar == 'y')
-        //     printf("received acknowledgement of receiving chunk, %c\n", recvchar);
-        // else
-        //     success = 0;
 
     }
     return success;
@@ -421,6 +467,42 @@ void process_request(int epoll_fd, event_data_t *event_data)
     uint8_t     *buffer = event_data->peer_data->buffer;
     uint8_t     *proto_buf, *chunk_content_buf;
     int         current_offset = 0;
+
+    if (event_data->peer_type == REPLICA_SECUNDO)
+    {
+        printf("\nRECEIVED ACKNOWLEDGEMEND FROM SECONDARY\n===================\n\n");
+        // handle this
+
+        event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
+        int32_t out_payload_size = sizeof(uint32_t) + event_data->peer_data->payload_size;
+        int32_t proto_net_len = htonl(event_data->peer_data->payload_size);
+
+        event_data_with_client->peer_data->out_payload_size = out_payload_size;
+
+        event_data_with_client->peer_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+        memcpy(event_data_with_client->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
+        memcpy(event_data_with_client->peer_data->out_buffer + sizeof(uint32_t),
+         event_data->peer_data->buffer, event_data->peer_data->payload_size);
+
+        // event_data_with_client->peer_data->out_buffer = event_data->peer_data->buffer;
+
+        event_data_with_client->peer_data->bytes_sent = 0;
+        event_data_with_client->peer_data->left_to_send = out_payload_size;
+
+        struct epoll_event event;
+        event.events = EPOLLOUT;
+
+        if (!event_data_with_client)
+            err_n_die("event_data->peer_data->true_client_event_data was NULL");
+
+        event.data.ptr = event_data_with_client;
+
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD,
+                      event_data_with_client->peer_data->client_socket, &event) < 0)
+            err_n_die("unable to add EPOLLOUT");
+
+        return;
+    }
 
     op_type = buffer[0];
     current_offset += 1;
@@ -485,7 +567,8 @@ void process_request(int epoll_fd, event_data_t *event_data)
         if (op_type == 'w')
         {
             // int res = forwardChunk(chunk, proto_len, proto_buf, chunk_content_len, chunk_content_buf);
-            int res = forwardChunk(epoll_fd, chunk, event_data->peer_data->payload_size, buffer);
+            int res = forwardChunk(epoll_fd, chunk, event_data->peer_data->payload_size, buffer, 
+                                    event_data);
         }
         // else if (op_type == 'd')
         // {

@@ -80,8 +80,8 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-#define MAX_THREADS_COUNT 16
-// #define MAX_THREADS_COUNT 1
+// #define MAX_THREADS_COUNT 16
+#define MAX_THREADS_COUNT 1
 
 #define REPLICATION_FACTOR 2
 
@@ -98,8 +98,11 @@ typedef enum
     EL_PRIMO
 } peer_type_t;
 
+typedef struct event_data_t event_data_t;
 typedef struct {
     int client_socket;
+    
+    event_data_t *true_client_event_data; // TODO: INITIALIZE AS NULL????????????????????
     
     // INBOUND
     uint8_t *buffer; // in buffer
@@ -123,7 +126,7 @@ typedef struct {
 } duplication_data_t;
 
 /* This struct we keep for every descriptor that will be multiplexed with epoll */
-typedef struct {
+struct event_data_t {
     int is_server;
     peer_type_t peer_type;
     union {
@@ -131,7 +134,7 @@ typedef struct {
         peer_data_t *peer_data;  // client connection
         duplication_data_t *duplication_data;
     };
-} event_data_t;
+};
 
 typedef struct {
     int id;
