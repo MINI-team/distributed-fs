@@ -457,6 +457,51 @@ void   new_replica__free_unpacked
   assert(message->base.descriptor == &new_replica__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   chunk_commit_report__init
+                     (ChunkCommitReport         *message)
+{
+  static const ChunkCommitReport init_value = CHUNK_COMMIT_REPORT__INIT;
+  *message = init_value;
+}
+size_t chunk_commit_report__get_packed_size
+                     (const ChunkCommitReport *message)
+{
+  assert(message->base.descriptor == &chunk_commit_report__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t chunk_commit_report__pack
+                     (const ChunkCommitReport *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &chunk_commit_report__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t chunk_commit_report__pack_to_buffer
+                     (const ChunkCommitReport *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &chunk_commit_report__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ChunkCommitReport *
+       chunk_commit_report__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ChunkCommitReport *)
+     protobuf_c_message_unpack (&chunk_commit_report__descriptor,
+                                allocator, len, data);
+}
+void   chunk_commit_report__free_unpacked
+                     (ChunkCommitReport *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &chunk_commit_report__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 static const ProtobufCFieldDescriptor file_request_read__field_descriptors[1] =
 {
   {
@@ -1030,5 +1075,69 @@ const ProtobufCMessageDescriptor new_replica__descriptor =
   new_replica__field_indices_by_name,
   1,  new_replica__number_ranges,
   (ProtobufCMessageInit) new_replica__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor chunk_commit_report__field_descriptors[3] =
+{
+  {
+    "ip",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(ChunkCommitReport, ip),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "port",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ChunkCommitReport, port),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "is_success",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(ChunkCommitReport, is_success),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned chunk_commit_report__field_indices_by_name[] = {
+  0,   /* field[0] = ip */
+  2,   /* field[2] = is_success */
+  1,   /* field[1] = port */
+};
+static const ProtobufCIntRange chunk_commit_report__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor chunk_commit_report__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ChunkCommitReport",
+  "ChunkCommitReport",
+  "ChunkCommitReport",
+  "",
+  sizeof(ChunkCommitReport),
+  3,
+  chunk_commit_report__field_descriptors,
+  chunk_commit_report__field_indices_by_name,
+  1,  chunk_commit_report__number_ranges,
+  (ProtobufCMessageInit) chunk_commit_report__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

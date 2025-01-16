@@ -80,12 +80,23 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-#define MAX_THREADS_COUNT 16
+// #define MAX_THREADS_COUNT 16
+#define MAX_THREADS_COUNT 1
 
 #define REPLICATION_FACTOR 2
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr
+
+typedef enum
+{
+    CLIENT_READ,
+    CLIENT_WRITE,
+    MASTER,
+    REPLICA_PRIMO,
+    REPLICA_SECUNDO,
+    EL_PRIMO
+} peer_type_t;
 
 typedef struct {
     int client_socket;
@@ -102,7 +113,7 @@ typedef struct {
     int out_payload_size;
     int bytes_sent;
     int left_to_send;
-} client_data_t;
+} peer_data_t;
 
 typedef struct {
     uint8_t *out_buffer;
@@ -113,10 +124,11 @@ typedef struct {
 
 /* This struct we keep for every descriptor that will be multiplexed with epoll */
 typedef struct {
-    int is_server; 
+    int is_server;
+    peer_type_t peer_type;
     union {
         int server_socket;          // server event
-        client_data_t *client_data;  // client connection
+        peer_data_t *peer_data;  // client connection
         duplication_data_t *duplication_data;
     };
 } event_data_t;
@@ -138,7 +150,7 @@ void debug_log(FILE *debugfd, const char *fmt, ...);
 int bulk_read(int fd, void *buf, int count);
 // int bulk_write(int fd, void *buf, int count);
 ssize_t bulk_write(int fd, const void *buf, size_t count);
-// int bulk_write_nonblock(client_data_t *client_data);
+// int bulk_write_nonblock(peer_data_t *peer_data);
 int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send);
 
 void abort_with_cleanup(char *msg, int serverfd);

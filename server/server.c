@@ -26,19 +26,19 @@ void handle_new_connection(int epoll_fd, int server_socket)
     if (!client_event_data)
         err_n_die("malloc error");
 
-    client_data_t *client_data = (client_data_t *)malloc(sizeof(client_data_t));
-    if (!client_data)
+    peer_data_t *peer_data = (peer_data_t *)malloc(sizeof(peer_data_t));
+    if (!peer_data)
         err_n_die("malloc error");
 
-    client_data->client_socket = client_socket;
-    client_data->buffer = (uint8_t *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(uint8_t));
-    client_data->payload_size = 0;
-    client_data->bytes_stored = 0;
-    client_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
-    client_data->reading_started = false;
+    peer_data->client_socket = client_socket;
+    peer_data->buffer = (uint8_t *)malloc((SINGLE_CLIENT_BUFFER_SIZE + 1) * sizeof(uint8_t));
+    peer_data->payload_size = 0;
+    peer_data->bytes_stored = 0;
+    peer_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
+    peer_data->reading_started = false;
     
     client_event_data->is_server = 0;
-    client_event_data->client_data = client_data;
+    client_event_data->peer_data = peer_data;
 
     struct epoll_event event;
     event.events = EPOLLIN;
@@ -61,12 +61,12 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     uint32_t out_payload_size = sizeof(uint32_t) + chunk_list_len;
     printf("chunk_list_len: %d\n", chunk_list_len);
 
-    event_data->client_data->out_payload_size = out_payload_size;
-    event_data->client_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
-    memcpy(event_data->client_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
-    memcpy(event_data->client_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
-    event_data->client_data->bytes_sent = 0;
-    event_data->client_data->left_to_send = out_payload_size;
+    event_data->peer_data->out_payload_size = out_payload_size;
+    event_data->peer_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
+    memcpy(event_data->peer_data->out_buffer, &chunk_list_net_len, sizeof(uint32_t));
+    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), buffer, chunk_list_len);
+    event_data->peer_data->bytes_sent = 0;
+    event_data->peer_data->left_to_send = out_payload_size;
 
     event_data->is_server = 0;
 
@@ -74,7 +74,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     event.events = EPOLLOUT;
     event.data.ptr = event_data;
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->client_data->client_socket, &event) < 0)
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
         err_n_die("unable to add EPOLLOUT");
 
     printf("from now on it's EPOLLOUT\n");
@@ -148,19 +148,19 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
 
 void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
 {
-    char request_type = event_data->client_data->buffer[0];
+    char request_type = event_data->peer_data->buffer[0];
 
     printf("request type: %c\n", request_type);
 
     if (request_type == 'w')
     {
         printf("write request detected \n");
-        printf("event_data->client_data->payload_size - 1: %d\n", event_data->client_data->payload_size - 1);
+        printf("event_data->peer_data->payload_size - 1: %d\n", event_data->peer_data->payload_size - 1);
         printf("halo\n");
         FileRequestWrite *fileRequestWrite = file_request_write__unpack(
             NULL,
-            event_data->client_data->payload_size - 1,
-            event_data->client_data->buffer + 1
+            event_data->peer_data->payload_size - 1,
+            event_data->peer_data->buffer + 1
         );
         if (!fileRequestWrite)
             err_n_die("ups");
@@ -171,7 +171,7 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
         {
-            printf("oho i hit client: %d\n", event_data->client_data->client_socket);
+            printf("oho i hit client: %d\n", event_data->peer_data->client_socket);
 
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
@@ -183,7 +183,7 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
     else if (request_type == 'r')
     {
         printf("read request detected \n"); 
-        FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
         printf("fileRequest->path: %s\n", FileRequestRead->path);
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
         
@@ -199,7 +199,7 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
     else if(request_type == 'n')
     {
         printf("new replica request detected \n");
-        NewReplica *replica = new_replica__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+        NewReplica *replica = new_replica__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
 
         printf("ip: %s\n", replica->ip);
         printf("port: %d\n", replica->port);
@@ -217,16 +217,16 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
     else
     {
         printf("request rejected \n");
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->client_data->client_socket, NULL))
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->peer_data->client_socket, NULL))
             err_n_die("epoll_ctl error");
-        close(event_data->client_data->client_socket);
-        free(event_data->client_data->buffer);
-        free(event_data->client_data);
+        close(event_data->peer_data->client_socket);
+        free(event_data->peer_data->buffer);
+        free(event_data->peer_data);
         free(event_data);
         return;
     }
 
-    // FileRequest *fileRequest = file_request__unpack(NULL, event_data->client_data->payload_size - 1, event_data->client_data->buffer + 1);
+    // FileRequest *fileRequest = file_request__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
     // printf("fileRequest->path: %s\n", fileRequest->path);
 }
 
@@ -236,38 +236,38 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
         err_n_die("epoll_ctl error");
 
-    free(event_data->client_data->buffer);
-    if (event_data->client_data->out_buffer)
+    free(event_data->peer_data->buffer);
+    if (event_data->peer_data->out_buffer)
     {
-        free(event_data->client_data->out_buffer);
-        event_data->client_data->out_buffer = NULL;
+        free(event_data->peer_data->out_buffer);
+        event_data->peer_data->out_buffer = NULL;
     }
-    free(event_data->client_data);
+    free(event_data->peer_data);
     free(event_data);
     close(client_socket);
 }
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
 {
-    int bytes_written = bulk_write_nonblock(client_event_data->client_data->client_socket,
-        client_event_data->client_data->out_buffer,
-        &(client_event_data->client_data->bytes_sent),
-        &(client_event_data->client_data->left_to_send)
+    int bytes_written = bulk_write_nonblock(client_event_data->peer_data->client_socket,
+        client_event_data->peer_data->out_buffer,
+        &(client_event_data->peer_data->bytes_sent),
+        &(client_event_data->peer_data->left_to_send)
     );
 
-    // int bytes_written = bulk_write_nonblock(client_event_data->client_data);
+    // int bytes_written = bulk_write_nonblock(client_event_data->peer_data);
 
     if (bytes_written == -1)
         return;
-    if (bytes_written == client_event_data->client_data->out_payload_size)
-        disconnect_client(epoll_fd, client_event_data, client_event_data->client_data->client_socket);
+    if (bytes_written == client_event_data->peer_data->out_payload_size)
+        disconnect_client(epoll_fd, client_event_data, client_event_data->peer_data->client_socket);
     else
         err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
 }
 
 void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
 {
-    int client_socket = event_data->client_data->client_socket;
+    int client_socket = event_data->peer_data->client_socket;
     int bytes_read;
     int32_t network_payload_size;
     
@@ -294,35 +294,35 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     }
 
     /* At this point we know we have a new client who declared their payload */
-    event_data->client_data->reading_started = true;
-    event_data->client_data->payload_size = ntohl(network_payload_size);
+    event_data->peer_data->reading_started = true;
+    event_data->peer_data->payload_size = ntohl(network_payload_size);
     
-    if (event_data->client_data->payload_size <= 0 ||
-        event_data->client_data->payload_size > SINGLE_CLIENT_BUFFER_SIZE)
+    if (event_data->peer_data->payload_size <= 0 ||
+        event_data->peer_data->payload_size > SINGLE_CLIENT_BUFFER_SIZE)
     {
         printf("Client declared invalid payload size\n");
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }
 
-    printf("Client configured, declared payload size: %d bytes\n", event_data->client_data->payload_size);
+    printf("Client configured, declared payload size: %d bytes\n", event_data->peer_data->payload_size);
 }
 
 void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
 {
-    int client_socket = event_data->client_data->client_socket;
+    int client_socket = event_data->peer_data->client_socket;
     int bytes_read;
 
-    if (event_data->client_data->reading_started == false)
+    if (event_data->peer_data->reading_started == false)
     {
         handle_new_client_payload_declaration(epoll_fd, event_data);
         return;
     }
 
-    printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->client_data->payload_size);
+    printf("handle_client, client_socket: %d, payload: %d\n", client_socket, event_data->peer_data->payload_size);
 
-    bytes_read = read(client_socket, event_data->client_data->buffer + event_data->client_data->bytes_stored,
-        event_data->client_data->space_left);
+    bytes_read = read(client_socket, event_data->peer_data->buffer + event_data->peer_data->bytes_stored,
+        event_data->peer_data->space_left);
 
     if (bytes_read == 0)
     {
@@ -333,12 +333,12 @@ void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, 
 
     printf("handle_client, bytes_read: %d\n", bytes_read);
 
-    event_data->client_data->space_left -= bytes_read;
-    event_data->client_data->bytes_stored += bytes_read;
+    event_data->peer_data->space_left -= bytes_read;
+    event_data->peer_data->bytes_stored += bytes_read;
 
-    if (event_data->client_data->bytes_stored == event_data->client_data->payload_size)
+    if (event_data->peer_data->bytes_stored == event_data->peer_data->payload_size)
         process_request(epoll_fd, event_data, replicas_count, all_replicas, hash_table);
-    else if (event_data->client_data->bytes_stored > event_data->client_data->payload_size)    /*multi-queries clients - TODO*/
+    else if (event_data->peer_data->bytes_stored > event_data->peer_data->payload_size)    /*multi-queries clients - TODO*/
         err_n_die("undefined");
 }
 

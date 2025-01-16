@@ -45,6 +45,7 @@ message FileResponse {
     bytes filedata = 2;
 }
 
+// CURRENTLY NOT USED
 message CommitChunk {
     bool success = 1;
     int32 chunk_id = 2;
@@ -55,4 +56,10 @@ message CommitChunk {
 message NewReplica {
     string ip = 1;
     int32 port = 2;
+}
+
+message ChunkCommitReport {
+    string ip = 1;
+    int32 port = 2;
+    bool is_success = 3;
 }
