@@ -65,6 +65,13 @@
 
 #define DEBUG
 
+#define LOG_LEVEL 6
+
+#define COM_DEF_LVL 7
+#define MAS_DEF_LVL 6
+#define REP_DEF_LVL 7
+#define CLI_DEF_LVL 6
+
 // #define CHUNK_SIZE 4096
 // #define CHUNK_SIZE 4096
 // #define CHUNK_SIZE 3554432
@@ -76,9 +83,9 @@
 
 // #define CHUNK_SIZE 1000
 
-#define CHUNK_SIZE 15
+// #define CHUNK_SIZE 1
 
-// #define CHUNK_SIZE 32000000 // 32MB zabije
+#define CHUNK_SIZE 32000000 // 32MB zabije
 
 #define MAX_THREADS_COUNT 1
 // #define MAX_THREADS_COUNT 16
@@ -168,4 +175,6 @@ int setup_connection_retry(int *server_socket, char *ip, uint16_t port);
 int64_t file_size(int filefd);
 
 const char *peer_type_to_string(peer_type_t peer_type);
+
+void print_logs(int level, const char *fmt, ...);
 #endif

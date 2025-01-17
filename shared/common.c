@@ -108,14 +108,14 @@ int bulk_read(int fd, void *buf, int count)
 
 // int bulk_write(int fd, void *buf, int count)
 // {
-//     printf("count: %d\n", count); //32000000
+//     print_logs(COM_DEF_LVL, "count: %d\n", count); //32000000
 //     int c;
 //     int len = 0;
 //     do
 //     {
 //         // c = TEMP_FAILURE_RETRY(write(fd, buf, count));
 //         c = write(fd, buf, count); // this return -1
-//         printf("tutaj c: %d\n", c);
+//         print_logs(COM_DEF_LVL, "tutaj c: %d\n", c);
 //         if (c < 0)
 //             return c;
 //         buf += c;
@@ -127,7 +127,7 @@ int bulk_read(int fd, void *buf, int count)
 
 ssize_t bulk_write(int fd, const void *buf, size_t count)
 {
-    printf("count: %zu\n", count);
+    print_logs(COM_DEF_LVL, "count: %zu\n", count);
 
     const unsigned char *p = buf;  // safer for pointer arithmetic
     ssize_t total_written  = 0;
@@ -135,7 +135,7 @@ ssize_t bulk_write(int fd, const void *buf, size_t count)
     while (count > 0)
     {
         ssize_t c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
-        printf("bulk_write: po write, c = %d\n", c);
+        print_logs(COM_DEF_LVL, "bulk_write: po write, c = %d\n", c);
         if (c < 0) {
             // If interrupted by a signal, you might want to continue
             if (errno == EINTR) {
@@ -171,7 +171,7 @@ ssize_t bulk_write(int fd, const void *buf, size_t count)
 //         {
 //             if (errno == EAGAIN || errno == EWOULDBLOCK)
 //             {
-//                 printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
+//                 print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
 //                 return -1;
 //             }
 //             err_n_die("read error"); // maybe replace THIS <--------------------------------
@@ -194,7 +194,7 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                printf("EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
+                print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
                 return -1;
             }
             err_n_die("read error");
@@ -208,7 +208,7 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
 
 void abort_with_cleanup(char *msg, int serverfd)
 {
-    printf("%s\n",msg);
+    print_logs(COM_DEF_LVL, "%s\n",msg);
     close(serverfd);
     exit(1);
 }
@@ -218,19 +218,19 @@ uint32_t read_payload_size(int fd, bool *timeout)
     /* We expect that first four bytes coming should be an integer declaring payload */
     uint32_t net_payload;
     int bytes_read;
-    // printf("wejdzie\n");
+    // print_logs(COM_DEF_LVL, "wejdzie\n");
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
     {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
         {
-            printf("\n\nread_payload_size, TIMEOUT\n\n");
+            print_logs(COM_DEF_LVL, "\n\nread_payload_size, TIMEOUT\n\n");
             *timeout = true;
             return 0;
         }
         err_n_die("read error");
     }
-    printf("bytes_read: %d\n", bytes_read);
-    // printf("a to nie wejdzie\n");
+    print_logs(COM_DEF_LVL, "bytes_read: %d\n", bytes_read);
+    // print_logs(COM_DEF_LVL, "a to nie wejdzie\n");
     if (bytes_read != sizeof(net_payload))
         abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", fd);
 
@@ -241,16 +241,16 @@ bool read_payload_and_data(int fd, uint8_t **buffer, uint32_t *payload)
 {
     bool timeout = false;
     uint32_t bytes_read = 0;
-    printf("reading payload\n");
+    print_logs(COM_DEF_LVL, "reading payload\n");
     (*payload) = read_payload_size(fd, &timeout);
     if (timeout)
         return timeout;
-    printf("payload received: %d \n", *payload);
+    print_logs(COM_DEF_LVL, "payload received: %d \n", *payload);
     *buffer = (uint8_t *)malloc((*payload) * sizeof(uint8_t));
 
     if ((bytes_read = bulk_read(fd, *buffer, *payload)) != *payload)
     {
-        printf("\n\nread_payload_and_data: bulk_read TIMEOUT\n\n");
+        print_logs(COM_DEF_LVL, "\n\nread_payload_and_data: bulk_read TIMEOUT\n\n");
         return true;
         // err_n_die("read_payload_and_data bytes_read: %d, payload: %d\n", bytes_read, *payload);
     }
@@ -266,16 +266,16 @@ void write_len_and_data(int fd, uint32_t len, uint8_t *data)
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, (int)sizeof(net_len));
 
-    // printf("writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
+    // print_logs(COM_DEF_LVL, "writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
     if ((sent = bulk_write(fd, data, len)) != len)
     {
-        printf("no i sie nie udalo\n");
+        print_logs(COM_DEF_LVL, "no i sie nie udalo\n");
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
     else
     {
-        printf("write_len_and_data_succeeded\n");
+        print_logs(COM_DEF_LVL, "write_len_and_data_succeeded\n");
     }
 }
 
@@ -298,7 +298,7 @@ void setup_connection(int *server_socket, char *ip, uint16_t port)
     
     if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
     {
-        printf("IP: %s, Port: %d\n", ip, port);
+        print_logs(COM_DEF_LVL, "IP: %s, Port: %d\n", ip, port);
         err_n_die("connect error");
     }
 }
@@ -322,7 +322,7 @@ int setup_connection_retry(int *server_socket, char *ip, uint16_t port)
     
     if (connect(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
     {
-        printf("IP: %s, Port: %d unavailable!! Retrying with different one\n", ip, port);
+        print_logs(COM_DEF_LVL, "IP: %s, Port: %d unavailable!! Retrying with different one\n", ip, port);
         return -1;
     }
     
@@ -355,4 +355,15 @@ const char *peer_type_to_string(peer_type_t peer_type)
             case EL_PRIMO:          return "EL_PRIMO";
             default:                return "UNKNOWN";
     }
+}
+
+void print_logs(int level, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+
+    if (level <= LOG_LEVEL)
+        vfprintf(stdout, fmt, ap);
+    
+    va_end(ap);
 }

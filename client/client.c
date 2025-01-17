@@ -58,7 +58,7 @@ void get_chunk(void *voidPtr)
     for (int i = 0; i < args->n_replicas; i++)
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            printf("\n=============================\nConnected to replica %d\n===================================\n",
+            print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
              args->replicas[i]->port);
             break;
         }
@@ -100,7 +100,7 @@ void put_chunk(void *voidPtr)
 {
     // sleep(1);
     int k;
-    // printf("hello\n");
+    // print_logs(CLI_DEF_LVL, "hello\n");
     int replicafd, net_len, ret = -1;
     size_t bytes_read, proto_len;
     struct sockaddr_in repladdr;
@@ -132,7 +132,7 @@ void put_chunk(void *voidPtr)
     for (int i = 0; i < args->n_replicas; i++)
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            printf("i:%d\n", i);
+            print_logs(CLI_DEF_LVL, "i:%d\n", i);
             break;
         }
 
@@ -149,12 +149,12 @@ void put_chunk(void *voidPtr)
     */
 
     bulk_write(replicafd, &payload_size, sizeof(payload_size));
-    printf("to sie niby udalo\n");
+    print_logs(CLI_DEF_LVL, "to sie niby udalo\n");
 
     write(replicafd, &op_type, 1);
     
     write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf);
-    printf("to sie nie uda\n");
+    print_logs(CLI_DEF_LVL, "to sie nie uda\n");
 
     write_len_and_data(replicafd, bytes_read, file_buf);
 
@@ -163,31 +163,28 @@ void put_chunk(void *voidPtr)
     free(file_buf);
     free(proto_buf);
 
-    printf("Waiting for commit\n");
+    print_logs(CLI_DEF_LVL, "Waiting for commit\n");
     uint32_t payload;
     uint8_t *buffer;
     // alert(5);
 
+    struct timeval timeout;
+    timeout.tv_sec = TIMEOUT_SEC;
+    timeout.tv_usec = TIMEOUT_MSEC;
 
-    // struct timeval timeout;
-    // timeout.tv_sec = TIMEOUT_SEC;
-    // timeout.tv_usec = TIMEOUT_MSEC;
+   if (setsockopt(replicafd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+        err_n_die("setsockopt timeout error");
 
-//    if (setsockopt(replicafd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
-//         err_n_die("setsockopt timeout error");
-    // for (int i = 0; i < REPLICATION_FACTOR; i++) BRING THIS BACK <-------------------------------------
-    // --------------------------------------------------------------------------
-    // --------------------------------------------------------------------------
     for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
         // TO ADD: use timeout = read_payload....
         read_payload_and_data(replicafd, &buffer, &payload);
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
-            printf("Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
+            print_logs(CLI_DEF_LVL, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
         else
-            printf("Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
+            print_logs(CLI_DEF_LVL, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
     }
     // w tym momencie, u repliki bedzie striggerowany EPOLLIN dla klienta i bytes_read = 0
@@ -204,9 +201,9 @@ void *thread_work(void *data)
         pthread_mutex_lock(tp_args->mutex);
         while (tp_args->work_taken && !tp_args->work_finished)
         {
-            printf("ja ide spac\n");
+            print_logs(CLI_DEF_LVL, "ja ide spac\n");
             pthread_cond_wait(tp_args->cond_main_to_threads, tp_args->mutex); 
-            printf("obudzono\n");
+            print_logs(CLI_DEF_LVL, "obudzono\n");
         }
         if (tp_args->work_finished)
         {
@@ -275,7 +272,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
         if (pthread_join(tid[i], NULL) != 0)
             err_n_die("pthread_join error");
 
-    printf("All threads joined \n");
+    print_logs(CLI_DEF_LVL, "All threads joined \n");
 }
 
 void do_read(char *path)
@@ -324,7 +321,7 @@ void do_write(char *path)
     int err, filefd, serverfd;
     int bytes_read;
 
-    printf("Opening file: %s\n", path);
+    print_logs(CLI_DEF_LVL, "Opening file: %s\n", path);
 
     if ((filefd = open(path, O_RDONLY)) < 0)
         err_n_die("filefd error");
@@ -354,7 +351,7 @@ void do_write(char *path)
     if (!chunk_list)
         err_n_die("chunk_list is null");
     else
-        printf("chunk_list NOT null\n");
+        print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
 
     chunk_list_global = chunk_list;
 
