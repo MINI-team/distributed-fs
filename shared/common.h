@@ -89,7 +89,7 @@
 
 // #define MAX_THREADS_COUNT 1
 #define MAX_THREADS_COUNT 16
-#define TIMEOUT_SEC 100
+#define TIMEOUT_SEC 1
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3
@@ -112,9 +112,11 @@ typedef enum
 typedef struct event_data_t event_data_t;
 typedef struct {
     int client_socket;
+    int connection_id;
     
     event_data_t *true_client_event_data; // TODO: INITIALIZE AS NULL????????????????????
-    
+    int true_client_connection_id;
+
     // INBOUND
     uint8_t *buffer; // in buffer
     int payload_size;

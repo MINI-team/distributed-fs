@@ -73,6 +73,14 @@ void server_setup(int *server_socket, int server_port, int *epoll_fd)
         err_n_die("epoll_ctl error");
 }
 
+void mark_new_connection(peer_data_t *peer_data)
+{
+    peer_data->connection_id = current_connection_id;
+    current_connections[peer_data->connection_id] = true;
+    current_connection_id = (current_connection_id + 1) % MAX_CONNECTIONS;
+    current_connection_cnt++;
+}
+
 void handle_new_connection(int epoll_fd, int server_socket)
 {
     int client_socket;
@@ -92,10 +100,6 @@ void handle_new_connection(int epoll_fd, int server_socket)
         return;
     }
 
-    current_connections[current_connection_id] = true;
-    current_connection_id++;
-    current_connection_cnt++;
-
     event_data_t *peer_event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!peer_event_data)
         err_n_die("malloc error");
@@ -111,6 +115,9 @@ void handle_new_connection(int epoll_fd, int server_socket)
     peer_data->space_left = SINGLE_CLIENT_BUFFER_SIZE;
     peer_data->reading_started = false;
     peer_data->out_buffer = NULL;
+
+    // marking the connection in current_connection; another case is that we initiate the connection
+    mark_new_connection(peer_data);
 
     peer_event_data->is_server = 0;
     peer_event_data->peer_data = peer_data;
@@ -130,6 +137,13 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
 {
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
         err_n_die("epoll_ctl error");
+
+    // set connection as not active and decrement current connection count
+    current_connection_cnt--;
+    current_connections[event_data->peer_data->connection_id] = false;
+
+    print_logs(0, "disconnect_client, setting connection %d with peer as false\ncurrent_connection_cnt is %d\n",
+     event_data->peer_data->connection_id, current_connection_cnt);
 
     free(event_data->peer_data->buffer);
     if (event_data->peer_data->out_buffer)
@@ -463,6 +477,9 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
         if (!peer_data)
             err_n_die("malloc error");
 
+        // marking the connection in current_connection; another case is when someone (client) tries to connect to us
+        mark_new_connection(peer_data);
+
         event_data->peer_data = peer_data;
         event_data->peer_data->buffer = NULL;
         event_data->peer_data->client_socket = replicafd;
@@ -537,7 +554,6 @@ void process_request(int epoll_fd, event_data_t *event_data)
                 // handle this
         event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
 
-
         if (!event_data_with_client)
         {
             print_logs(0, "event_data_with_client is NULL !!!!\n");
@@ -548,6 +564,16 @@ void process_request(int epoll_fd, event_data_t *event_data)
             print_logs(0, "event_data_with_client->peer_data is NULL !!!!\n");
             return;
         }
+
+        if (!current_connections[event_data_with_client->peer_data->connection_id])
+        {
+            print_logs(0, "lost connection with peer(client), id %d\ntherefore can't send ack\n\n\n",
+                       event_data_with_client->peer_data->connection_id);
+
+            return;
+        }
+
+
         if (!(event_data_with_client->peer_data->out_buffer))
         {
             print_logs(0, "event_data_with_client out_buffer is NULL !!!!\n");
@@ -751,6 +777,8 @@ void register_to_master(int epoll_fd)
     // setup_connection(&masterfd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
     set_fd_nonblocking(masterfd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+    
+
     event_data_t *event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!event_data)
         err_n_die("malloc error");
@@ -758,6 +786,8 @@ void register_to_master(int epoll_fd)
     peer_data_t *peer_data = (peer_data_t *)malloc(sizeof(peer_data_t));
     if (!peer_data)
         err_n_die("malloc error");
+
+    mark_new_connection(peer_data);
 
     event_data->peer_data = peer_data;
     event_data->peer_data->buffer = NULL;
