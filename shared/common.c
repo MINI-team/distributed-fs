@@ -213,15 +213,22 @@ void abort_with_cleanup(char *msg, int serverfd)
     exit(1);
 }
 
-uint32_t read_payload_size(int fd)
+uint32_t read_payload_size(int fd, bool *timeout)
 {
     /* We expect that first four bytes coming should be an integer declaring payload */
     uint32_t net_payload;
     int bytes_read;
     // printf("wejdzie\n");
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
+    {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+        {
+            printf("\n\nread_payload_size, TIMEOUT\n\n");
+            *timeout = true;
+            return 0;
+        }
         err_n_die("read error");
-
+    }
     printf("bytes_read: %d\n", bytes_read);
     // printf("a to nie wejdzie\n");
     if (bytes_read != sizeof(net_payload))
@@ -230,16 +237,25 @@ uint32_t read_payload_size(int fd)
     return ntohl(net_payload);
 }
 
-void read_paylaod_and_data(int fd, uint8_t **buffer, uint32_t *payload)
+bool read_payload_and_data(int fd, uint8_t **buffer, uint32_t *payload)
 {
+    bool timeout = false;
     uint32_t bytes_read = 0;
     printf("reading payload\n");
-    (*payload) = read_payload_size(fd);
+    (*payload) = read_payload_size(fd, &timeout);
+    if (timeout)
+        return timeout;
     printf("payload received: %d \n", *payload);
     *buffer = (uint8_t *)malloc((*payload) * sizeof(uint8_t));
 
     if ((bytes_read = bulk_read(fd, *buffer, *payload)) != *payload)
-        err_n_die("read_paylaod_and_data bytes_read: %d, payload: %d\n", bytes_read, *payload);
+    {
+        printf("\n\nread_payload_and_data: bulk_read TIMEOUT\n\n");
+        return true;
+        // err_n_die("read_payload_and_data bytes_read: %d, payload: %d\n", bytes_read, *payload);
+    }
+
+    return false;
 }
 
 void write_len_and_data(int fd, uint32_t len, uint8_t *data)
@@ -324,4 +340,19 @@ int64_t file_size(int filefd)
     }
 
     return (int64_t)file_stat.st_size;
+}
+
+
+const char *peer_type_to_string(peer_type_t peer_type)
+{
+    switch (peer_type)
+    {
+            case CLIENT_READ:       return "CLIENT_READ";
+            case CLIENT_WRITE:      return "CLIENT_WRITE";
+            case MASTER:            return "MASTER";
+            case REPLICA_PRIMO:     return "REPLICA_PRIMO";
+            case REPLICA_SECUNDO:   return "REPLICA_SECUNDO";
+            case EL_PRIMO:          return "EL_PRIMO";
+            default:                return "UNKNOWN";
+    }
 }

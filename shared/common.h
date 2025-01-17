@@ -76,14 +76,16 @@
 
 // #define CHUNK_SIZE 1000
 
-// #define CHUNK_SIZE 
+#define CHUNK_SIZE 15
 
-#define CHUNK_SIZE 32000000 // 32MB zabije
+// #define CHUNK_SIZE 32000000 // 32MB zabije
 
-// #define MAX_THREADS_COUNT 16
 #define MAX_THREADS_COUNT 1
+// #define MAX_THREADS_COUNT 16
+#define TIMEOUT_SEC 2
+#define TIMEOUT_MSEC 0
 
-#define REPLICATION_FACTOR 2
+#define REPLICATION_FACTOR 3
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr
@@ -151,18 +153,19 @@ char *resolve_host(char *host_name);
 void debug_log(FILE *debugfd, const char *fmt, ...);
 
 int bulk_read(int fd, void *buf, int count);
-// int bulk_write(int fd, void *buf, int count);
+uint32_t read_payload_size(int fd, bool *timeout);
 ssize_t bulk_write(int fd, const void *buf, size_t count);
 // int bulk_write_nonblock(peer_data_t *peer_data);
 int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send);
 
 void abort_with_cleanup(char *msg, int serverfd);
-uint32_t read_payload_size(int serverfd);
-void read_paylaod_and_data(int serverfd, uint8_t **buffer, uint32_t *payload);
+bool read_payload_and_data(int serverfd, uint8_t **buffer, uint32_t *payload);
 void write_len_and_data(int fd, uint32_t len, uint8_t *data);
 
 void setup_connection(int *server_socket, char *ip, uint16_t port);
 int setup_connection_retry(int *server_socket, char *ip, uint16_t port);
 
 int64_t file_size(int filefd);
+
+const char *peer_type_to_string(peer_type_t peer_type);
 #endif

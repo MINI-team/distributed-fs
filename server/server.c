@@ -126,10 +126,10 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
             //     rand_ind = 1;
 
             // NIE JEBANY RAND - MOŻE ON DAĆ TĘ SAMĄ REPLIKĘ JAKO WSZYSTKIE REPLIKI DANEGO CHUNKU
-            if (j == 0)
-                rand_ind = i % replicas_count;
-            if (j == 1)
-                rand_ind = (i + 1) % replicas_count;
+
+            rand_ind = (i + j) % replicas_count;
+
+            // rand_ind = j;
 
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);
@@ -326,7 +326,7 @@ void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, 
 
     if (bytes_read == 0)
     {
-        printf("Client disconnected \n");
+        printf("Client %d disconnected \n", client_socket);
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }

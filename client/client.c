@@ -80,7 +80,7 @@ void get_chunk(void *voidPtr)
 
     write_len_and_data(replicafd, len_chunkRequest, proto_buf);
 
-    int32_t chunk_content_len = read_payload_size(replicafd);
+    uint32_t chunk_content_len = read_payload_size(replicafd, NULL);
 
     uint8_t *buffer = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
     if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
@@ -98,6 +98,7 @@ void get_chunk(void *voidPtr)
 
 void put_chunk(void *voidPtr)
 {
+    // sleep(1);
     int k;
     // printf("hello\n");
     int replicafd, net_len, ret = -1;
@@ -167,12 +168,20 @@ void put_chunk(void *voidPtr)
     uint8_t *buffer;
     // alert(5);
 
+
+    // struct timeval timeout;
+    // timeout.tv_sec = TIMEOUT_SEC;
+    // timeout.tv_usec = TIMEOUT_MSEC;
+
+//    if (setsockopt(replicafd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+//         err_n_die("setsockopt timeout error");
     // for (int i = 0; i < REPLICATION_FACTOR; i++) BRING THIS BACK <-------------------------------------
     // --------------------------------------------------------------------------
     // --------------------------------------------------------------------------
     for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
-        read_paylaod_and_data(replicafd, &buffer, &payload);
+        // TO ADD: use timeout = read_payload....
+        read_payload_and_data(replicafd, &buffer, &payload);
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
             printf("Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
@@ -291,7 +300,7 @@ void do_read(char *path)
     free(buffer);
 
     uint32_t payload;
-    read_paylaod_and_data(serverfd, &buffer, &payload);
+    read_payload_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
     if (!chunk_list)
@@ -339,7 +348,7 @@ void do_write(char *path)
     free(buffer);
 
     uint32_t payload;
-    read_paylaod_and_data(serverfd, &buffer, &payload);
+    read_payload_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
     if (!chunk_list)
