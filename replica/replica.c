@@ -252,7 +252,8 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
         &(event_data->peer_data->bytes_sent),
         &(event_data->peer_data->left_to_send)
     );
-    printf("poszlo bytes_written: %d, w sumie wyslano: %d\n", bytes_written, event_data->peer_data->bytes_sent);
+    printf("poszlo bytes_written: %d, w sumie wyslano: %d; out_payload size to: %d\n",
+     bytes_written, event_data->peer_data->bytes_sent, event_data->peer_data->out_payload_size);
 
     if (bytes_written == -1)
         return;
@@ -273,7 +274,12 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
             // na razie nie zamykamy (powinnismy zamknac, jak trzy repliki zapisza)
             struct epoll_event event;
             event.events = EPOLLIN;
-            event.data.ptr = event_data; 
+            // we will overwrite the out buffer, so we prepare for that here
+            event_data->peer_data->out_payload_size = 0;
+            event_data->peer_data->bytes_sent = 0;
+            event_data->peer_data->left_to_send = 0;
+
+            event.data.ptr = event_data;
 
             if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
                 err_n_die("unable to modify epoll for CLIENT_WRITE");
@@ -496,20 +502,26 @@ void process_request(int epoll_fd, event_data_t *event_data)
             printf("event_data_with_client is NULL !!!!\n");
         }
 
-        int32_t out_payload_size = sizeof(uint32_t) + event_data->peer_data->payload_size;
+        int32_t old_payload_size = event_data_with_client->peer_data->out_payload_size;
+        int32_t additional_payload_size = sizeof(uint32_t) + event_data->peer_data->payload_size;
         int32_t proto_net_len = htonl(event_data->peer_data->payload_size);
 
-        event_data_with_client->peer_data->out_payload_size = out_payload_size;
+        event_data_with_client->peer_data->out_payload_size += additional_payload_size;
+        // event_data_with_client->peer_data->bytes_sent = 0;
+        // don't zero this; it was zeroed when we wrote all that was to send to this client
+        // if it's not zero, then we are in the middle of writing and it's true that we sent some
+        event_data_with_client->peer_data->left_to_send += additional_payload_size;
 
-        event_data_with_client->peer_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
-        memcpy(event_data_with_client->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
-        memcpy(event_data_with_client->peer_data->out_buffer + sizeof(uint32_t),
-         event_data->peer_data->buffer, event_data->peer_data->payload_size);
+        event_data_with_client->peer_data->out_buffer =
+            (uint8_t *)realloc(event_data_with_client->peer_data->out_buffer, 
+            event_data_with_client->peer_data->out_payload_size * sizeof(uint8_t));
+
+        memcpy(event_data_with_client->peer_data->out_buffer + old_payload_size,
+                 &proto_net_len, sizeof(uint32_t));
+        memcpy(event_data_with_client->peer_data->out_buffer + old_payload_size + sizeof(uint32_t),
+               event_data->peer_data->buffer, event_data->peer_data->payload_size);
 
         // event_data_with_client->peer_data->out_buffer = event_data->peer_data->buffer;
-
-        event_data_with_client->peer_data->bytes_sent = 0;
-        event_data_with_client->peer_data->left_to_send = out_payload_size;
 
         struct epoll_event event;
         event.events = EPOLLOUT | EPOLLIN;
