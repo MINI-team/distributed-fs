@@ -70,7 +70,7 @@
 #define COM_DEF_LVL 7
 #define MAS_DEF_LVL 6
 #define REP_DEF_LVL 7
-#define CLI_DEF_LVL 6
+#define CLI_DEF_LVL 7
 
 // #define CHUNK_SIZE 4096
 // #define CHUNK_SIZE 4096
@@ -87,15 +87,17 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-#define MAX_THREADS_COUNT 1
-// #define MAX_THREADS_COUNT 16
-#define TIMEOUT_SEC 2
+// #define MAX_THREADS_COUNT 1
+#define MAX_THREADS_COUNT 16
+#define TIMEOUT_SEC 100
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3
 
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr
+
+#define MAX_CONNECTIONS 1000
 
 typedef enum
 {

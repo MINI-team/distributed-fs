@@ -163,7 +163,7 @@ void put_chunk(void *voidPtr)
     free(file_buf);
     free(proto_buf);
 
-    print_logs(CLI_DEF_LVL, "Waiting for commit\n");
+    print_logs(5, "Waiting for commit\n");
     uint32_t payload;
     uint8_t *buffer;
     // alert(5);
@@ -178,7 +178,12 @@ void put_chunk(void *voidPtr)
     for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
         // TO ADD: use timeout = read_payload....
-        read_payload_and_data(replicafd, &buffer, &payload);
+        if(read_payload_and_data(replicafd, &buffer, &payload) == true)
+        {
+            print_logs(5, "Timeout for replica %d\n", i);
+            // err_n_die("was timeout");
+            continue;
+        }
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
             print_logs(CLI_DEF_LVL, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
@@ -272,7 +277,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
         if (pthread_join(tid[i], NULL) != 0)
             err_n_die("pthread_join error");
 
-    print_logs(CLI_DEF_LVL, "All threads joined \n");
+    print_logs(0, "All threads joined \n");
 }
 
 void do_read(char *path)
