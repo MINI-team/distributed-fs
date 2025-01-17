@@ -267,6 +267,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
             disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
             break;
         case CLIENT_WRITE:
+        {
             // wysylamy
             //
             // na razie nie zamykamy (powinnismy zamknac, jak trzy repliki zapisza)
@@ -280,7 +281,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
             // if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, event_data->peer_data->client_socket, NULL) < 0)
             //     err_n_die("unable to del");
             break;
-
+        }
         case REPLICA_SECUNDO:
             // nie zamykamy socketu, zamieniamy na EPOLLIN
             // EPOLLOUT -> EPOLLIN
@@ -483,7 +484,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
     if (event_data->peer_type == REPLICA_SECUNDO)
     {
-        printf("\nRECEIVED ACKNOWLEDGEMEND FROM SECONDARY\n===================\n\n");
+        printf("\nRECEIVED ACKNOWLEDGEMENT FROM SECONDARY\n===================\n\n");
 
         
         // handle this
