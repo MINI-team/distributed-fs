@@ -89,7 +89,7 @@
 
 // #define MAX_THREADS_COUNT 1
 #define MAX_THREADS_COUNT 16
-#define TIMEOUT_SEC 1
+#define TIMEOUT_SEC 5
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3

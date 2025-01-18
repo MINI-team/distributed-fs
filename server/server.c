@@ -119,6 +119,14 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
             //     rand_ind = i % 2;
             // if (j == 2)
             //     rand_ind = (i+1) % 2;
+
+
+            // if (j == 0)
+            //     rand_ind = i % 3;
+            // if (j = 1)
+            //     rand_ind = (i+1) % 3;
+            // if (j == 2)
+            //     rand_ind = (i+2) % 3;
             
             // if (j == 0 || j == 1)
             //     rand_ind = 0;
@@ -127,9 +135,9 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
 
             // NIE JEBANY RAND - MOŻE ON DAĆ TĘ SAMĄ REPLIKĘ JAKO WSZYSTKIE REPLIKI DANEGO CHUNKU
 
-            // rand_ind = (i + j) % replicas_count;
+            rand_ind = (i + j) % replicas_count;
 
-            rand_ind = j;
+            // rand_ind = j;
 
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);

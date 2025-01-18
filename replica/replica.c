@@ -14,6 +14,7 @@ char replica_ip[IP_LENGTH] = "127.0.0.1";
 int current_connection_id = -1;
 bool current_connections[MAX_CONNECTIONS];
 
+
 #define MAX_EVENTS 4096
 #define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
 
@@ -418,7 +419,7 @@ void prepare_epollout(int epoll_fd, int peer_fd, uint32_t proto_len, uint8_t *pr
         err_n_die("unable to add EPOLLOUT");
 }
 
-void prepare_local_write_ack(int epoll_fd, event_data_t *client_event_data, peer_type_t peer_type)
+void prepare_local_write_ack(int epoll_fd, event_data_t *event_data, peer_type_t peer_type)
 {
     // prepare protobuf message, pack it to proto_buf, 
     // prepare old epoll event for writing with payload and packed message
@@ -433,27 +434,27 @@ void prepare_local_write_ack(int epoll_fd, event_data_t *client_event_data, peer
     uint8_t *proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
     chunk_commit_report__pack(&chunk_commit_report, proto_buf);
 
-    prepare_epollout(epoll_fd, client_event_data->peer_data->client_socket, proto_len,
-        proto_buf, CLIENT_ACK, client_event_data->peer_data->connection_id);
+    // prepare_epollout(epoll_fd, client_event_data->peer_data->client_socket, proto_len,
+    //     proto_buf, CLIENT_ACK, client_event_data->peer_data->connection_id);
 
-    // proto_net_len = htonl(proto_len);
-    // int32_t out_payload_size = sizeof(uint32_t) + proto_len;
-    // event_data->peer_data->out_payload_size = out_payload_size;
-    // event_data->peer_data->out_buffer = (uint8_t *) malloc(out_payload_size * sizeof(uint8_t));
+    proto_net_len = htonl(proto_len);
+    int32_t out_payload_size = sizeof(uint32_t) + proto_len;
+    event_data->peer_data->out_payload_size = out_payload_size;
+    event_data->peer_data->out_buffer = (uint8_t *) malloc(out_payload_size * sizeof(uint8_t));
 
 
-    // memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
-    // memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
-    // event_data->peer_data->bytes_sent = 0;
-    // event_data->peer_data->left_to_send = out_payload_size;
-    // event_data->peer_type = peer_type;
+    memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
+    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
+    event_data->peer_data->bytes_sent = 0;
+    event_data->peer_data->left_to_send = out_payload_size;
+    event_data->peer_type = peer_type;
 
-    // struct epoll_event event;
-    // event.events = EPOLLOUT | EPOLLIN; // 
-    // event.data.ptr = event_data;
+    struct epoll_event event;
+    event.events = EPOLLOUT | EPOLLIN; // 
+    event.data.ptr = event_data;
 
-    // if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
-    //     err_n_die("unable to add EPOLLOUT");
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
 }
 
 void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int length, Chunk *chunk, 
@@ -522,6 +523,7 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
         event_data->peer_type = REPLICA_SECUNDO;
 
         // event_data->peer_data->true_client_socket = true_client_socket;
+        event_data->peer_data->true_client_connection_id = true_client_event_data->peer_data->connection_id;
         event_data->peer_data->true_client_event_data = true_client_event_data;
 
         uint32_t chunk_net_size = htonl(chunk_size);
@@ -590,11 +592,16 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
 
         if (!current_connections[event_data->peer_data->true_client_connection_id])
-            return;                
+        {
+            // TODO disconnect replica
+            printf("CLIENT disconnected, ACK aborted\n");
+            return;
+        }
 
         // ponizszy kod zostanie PRZEORANY
 
-        // event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
+        event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
+
 
         if (!event_data_with_client)
         {
