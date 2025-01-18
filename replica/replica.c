@@ -10,8 +10,8 @@
 int replica_port = 8080;
 char replica_ip[IP_LENGTH] = "127.0.0.1";
 
-int current_connection_cnt = 0;
-int current_connection_id = 0;
+// int current_connection_cnt = 0;
+int current_connection_id = -1;
 bool current_connections[MAX_CONNECTIONS];
 
 #define MAX_EVENTS 4096
@@ -75,24 +75,19 @@ void server_setup(int *server_socket, int server_port, int *epoll_fd)
 
 void mark_new_connection(peer_data_t *peer_data)
 {
+    if (++current_connection_id >= MAX_CONNECTIONS)
+        err_n_die("current_connection_id exceeded MAX_CONNECTIONS");
+
     peer_data->connection_id = current_connection_id;
     current_connections[peer_data->connection_id] = true;
-    current_connection_id = (current_connection_id + 1) % MAX_CONNECTIONS;
-    current_connection_cnt++;
+
+    // current_connection_id = (current_connection_id + 1) % MAX_CONNECTIONS;
+    // current_connection_cnt++;
 }
 
 void handle_new_connection(int epoll_fd, int server_socket)
 {
     int client_socket;
-
-    print_logs(REP_DEF_LVL, "New client connected, id %d\n", current_connection_id);
-
-
-    if(current_connection_id >= MAX_CONNECTIONS)
-    {
-        // should handle this!!!
-        err_n_die("Too many connections, dying!!!");
-    }
 
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
@@ -127,6 +122,8 @@ void handle_new_connection(int epoll_fd, int server_socket)
     event.events = EPOLLIN;
     event.data.ptr = peer_event_data;
 
+    print_logs(0, "New client connected, id %d\n", peer_data->connection_id);
+
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
         err_n_die("epoll_ctl error");
 
@@ -139,18 +136,24 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
         err_n_die("epoll_ctl error");
 
     // set connection as not active and decrement current connection count
-    current_connection_cnt--;
+    // current_connection_cnt--;
     current_connections[event_data->peer_data->connection_id] = false;
 
-    print_logs(0, "disconnect_client, setting connection %d with peer as false\ncurrent_connection_cnt is %d\n",
-     event_data->peer_data->connection_id, current_connection_cnt);
+    print_logs(0, "disconnect_client, setting connection %d with peer as false\n",
+        event_data->peer_data->connection_id);
 
-    free(event_data->peer_data->buffer);
+    if (event_data->peer_data->buffer)
+    {
+        free(event_data->peer_data->buffer);
+        event_data->peer_data->buffer = NULL;
+    }
+
     if (event_data->peer_data->out_buffer)
     {
         free(event_data->peer_data->out_buffer);
         event_data->peer_data->out_buffer = NULL;
     }
+
     free(event_data->peer_data);
     event_data->peer_data = NULL;
     free(event_data);
@@ -159,12 +162,6 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
     print_logs(0, "freeing every structure (event_data and members) of client (socket %d) and setting them as NULL\n", client_socket);
 
     close(client_socket);
-
-    /*
-
-        struct event_da
-
-    */
 }
 
 void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
@@ -387,7 +384,41 @@ void write_to_disk(const char *filepat, uint8_t *data, int length)
     close(fd);
 }
 
-void prepare_local_write_ack(int epoll_fd, event_data_t *event_data, peer_type_t peer_type)
+void prepare_epollout(int epoll_fd, int peer_fd, uint32_t proto_len, uint8_t *proto_buf, 
+                        peer_type_t peer_type, int connection_id)
+{
+    event_data_t *event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    if (!event_data)
+        err_n_die("malloc error");
+
+    peer_data_t *peer_data = (peer_data_t *)malloc(sizeof(peer_data_t));
+    if (!peer_data)
+        err_n_die("malloc error");
+
+    event_data->peer_data = peer_data;
+    event_data->peer_data->buffer = NULL;
+    event_data->peer_data->client_socket = peer_fd;
+    event_data->peer_data->connection_id = connection_id;
+    event_data->is_server = false;
+
+    uint32_t proto_net_len = htonl(proto_len);
+    uint32_t out_payload_size = sizeof(uint32_t) + proto_len;
+    event_data->peer_data->out_payload_size = out_payload_size;
+    event_data->peer_data->out_buffer = (uint8_t *) malloc(out_payload_size * sizeof(uint8_t));
+    memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
+    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
+    event_data->peer_data->bytes_sent = 0;
+    event_data->peer_data->left_to_send = out_payload_size;
+
+    struct epoll_event event;
+    event.events = EPOLLOUT | EPOLLIN; // 
+    event.data.ptr = event_data;
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
+        err_n_die("unable to add EPOLLOUT");
+}
+
+void prepare_local_write_ack(int epoll_fd, event_data_t *client_event_data, peer_type_t peer_type)
 {
     // prepare protobuf message, pack it to proto_buf, 
     // prepare old epoll event for writing with payload and packed message
@@ -402,23 +433,27 @@ void prepare_local_write_ack(int epoll_fd, event_data_t *event_data, peer_type_t
     uint8_t *proto_buf = (uint8_t *)malloc(proto_len * sizeof(uint8_t));
     chunk_commit_report__pack(&chunk_commit_report, proto_buf);
 
-    proto_net_len = htonl(proto_len);
-    int32_t out_payload_size = sizeof(uint32_t) + proto_len;
-    event_data->peer_data->out_payload_size = out_payload_size;
-    event_data->peer_data->out_buffer = (uint8_t *) malloc(out_payload_size * sizeof(uint8_t));
+    prepare_epollout(epoll_fd, client_event_data->peer_data->client_socket, proto_len,
+        proto_buf, CLIENT_ACK, client_event_data->peer_data->connection_id);
 
-    memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
-    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
-    event_data->peer_data->bytes_sent = 0;
-    event_data->peer_data->left_to_send = out_payload_size;
-    event_data->peer_type = peer_type;
+    // proto_net_len = htonl(proto_len);
+    // int32_t out_payload_size = sizeof(uint32_t) + proto_len;
+    // event_data->peer_data->out_payload_size = out_payload_size;
+    // event_data->peer_data->out_buffer = (uint8_t *) malloc(out_payload_size * sizeof(uint8_t));
 
-    struct epoll_event event;
-    event.events = EPOLLOUT | EPOLLIN; // 
-    event.data.ptr = event_data;
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
-        err_n_die("unable to add EPOLLOUT");
+    // memcpy(event_data->peer_data->out_buffer, &proto_net_len, sizeof(uint32_t));
+    // memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), proto_buf, proto_len);
+    // event_data->peer_data->bytes_sent = 0;
+    // event_data->peer_data->left_to_send = out_payload_size;
+    // event_data->peer_type = peer_type;
+
+    // struct epoll_event event;
+    // event.events = EPOLLOUT | EPOLLIN; // 
+    // event.data.ptr = event_data;
+
+    // if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
+    //     err_n_die("unable to add EPOLLOUT");
 }
 
 void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int length, Chunk *chunk, 
@@ -552,7 +587,14 @@ void process_request(int epoll_fd, event_data_t *event_data)
         print_logs(0, "\n===================\nRECEIVED ACKNOWLEDGEMENT FROM SECONDARY\n\n");
 
                 // handle this
-        event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
+
+
+        if (!current_connections[event_data->peer_data->true_client_connection_id])
+            return;                
+
+        // ponizszy kod zostanie PRZEORANY
+
+        // event_data_t *event_data_with_client = event_data->peer_data->true_client_event_data;
 
         if (!event_data_with_client)
         {
@@ -724,21 +766,6 @@ void handle_client(int epoll_fd, event_data_t *event_data)
         print_logs(0, "Client %d (%s) disconnected \n", client_socket, peer_type_to_string(event_data->peer_type));
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
-        // if (event_data->peer_type == EL_PRIMO)
-        // {
-        //     print_logs(REP_DEF_LVL, "EL_PRIMO disconnected \n");
-        //     disconnect_client(epoll_fd, event_data, client_socket);
-        //     return;
-        // }
-        
-
-        // if (event_data->peer_type == REPLICA_SECUNDO || event_data->peer_data == REPLICA_PRIMO || event_data->peer_data == MASTER)
-        // {
-        // print_logs(REP_DEF_LVL, "Client disconnected \n");
-        // disconnect_client(epoll_fd, event_data, client_socket);
-        // return;
-        // }
-        // err_n_die("musialem cos sprawdzic\n");
     }
 
     // print_logs(REP_DEF_LVL, "handle_client, bytes_read: %d\n", bytes_read);
@@ -777,7 +804,6 @@ void register_to_master(int epoll_fd)
     // setup_connection(&masterfd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
     set_fd_nonblocking(masterfd); // to jest do zrobienia !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-    
 
     event_data_t *event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!event_data)

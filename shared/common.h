@@ -97,7 +97,7 @@
 #define IP_LENGTH 16 // 15 + 1 for a null terminator
 #define SA struct sockaddr
 
-#define MAX_CONNECTIONS 1000
+#define MAX_CONNECTIONS 1000000
 
 typedef enum
 {
@@ -106,6 +106,7 @@ typedef enum
     MASTER,
     REPLICA_PRIMO,
     REPLICA_SECUNDO,
+    CLIENT_ACK,
     EL_PRIMO
 } peer_type_t;
 
