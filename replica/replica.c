@@ -180,7 +180,7 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
             print_logs(REP_DEF_LVL, "EAGAIN/EWOULDBLOK\n");
             return;
         }
-        err_n_die("read error");
+        err_n_die("read error 183");
     }
     if (bytes_read < sizeof(network_payload_size))
     {
@@ -380,7 +380,7 @@ void write_to_disk(const char *filepat, uint8_t *data, int length)
 
     print_logs(REP_DEF_LVL, "imo tu sie wyjebie\n");
     if ((n = bulk_write(fd, data, length)) == -1)
-        err_n_die("read error");
+        err_n_die("read error 383");
 
     close(fd);
 }

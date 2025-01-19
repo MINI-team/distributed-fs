@@ -67,10 +67,15 @@
 
 #define LOG_LEVEL 6
 
-#define COM_DEF_LVL 7
-#define MAS_DEF_LVL 6
-#define REP_DEF_LVL 7
-#define CLI_DEF_LVL 7
+// #define COM_DEF_LVL 7
+// #define MAS_DEF_LVL 6
+// #define REP_DEF_LVL 7
+// #define CLI_DEF_LVL 7
+
+#define COM_DEF_LVL 0
+#define MAS_DEF_LVL 0
+#define REP_DEF_LVL 0
+#define CLI_DEF_LVL 0
 
 // #define CHUNK_SIZE 4096
 // #define CHUNK_SIZE 4096
@@ -88,8 +93,8 @@
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
 // #define MAX_THREADS_COUNT 1
-#define MAX_THREADS_COUNT 16
-#define TIMEOUT_SEC 5
+#define MAX_THREADS_COUNT 32
+#define TIMEOUT_SEC 2
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3

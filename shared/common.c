@@ -197,7 +197,7 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
                 print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
                 return -1;
             }
-            err_n_die("read error");
+            err_n_die("write error");
         }
 
         *bytes_sent += c;
@@ -227,7 +227,7 @@ uint32_t read_payload_size(int fd, bool *timeout)
             *timeout = true;
             return 0;
         }
-        err_n_die("read error");
+        err_n_die("read error 230");
     }
     print_logs(COM_DEF_LVL, "bytes_read: %d\n", bytes_read);
     // print_logs(COM_DEF_LVL, "a to nie wejdzie\n");

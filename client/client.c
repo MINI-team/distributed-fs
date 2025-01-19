@@ -180,16 +180,16 @@ void put_chunk(void *voidPtr)
         // TO ADD: use timeout = read_payload....
         if(read_payload_and_data(replicafd, &buffer, &payload) == true)
         {
-            print_logs(5, "Timeout for replica %d\n", i);
+            print_logs(1, "Timeout for replica %d\n", i);
             // err_n_die("was timeout");
             continue;
         }
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
-            print_logs(CLI_DEF_LVL, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
+            print_logs(0, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
         else
-            print_logs(CLI_DEF_LVL, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
+            print_logs(0, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
     }
     // w tym momencie, u repliki bedzie striggerowany EPOLLIN dla klienta i bytes_read = 0
