@@ -11,6 +11,9 @@
 
 #define MAX_EVENTS 10
 
+// int replica_robin_index = 0;
+// int total_alive_replicas = 0;
+
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
@@ -82,8 +85,19 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     free(buffer);
 }
 
-void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
+void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table)
 {
+    int replicas_count = replicas_data->replicas_count;
+    int total_alive_replicas = replicas_data->total_alive_replicas;
+    int *replica_robin_index = &(replicas_data->replica_robin_index);
+    replica_info_t **all_replicas = replicas_data->all_replicas;
+
+    if (total_alive_replicas < REPLICATION_FACTOR)
+    {
+        // TODO disconnect the client 
+        print_logs(0, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
+        return;
+    }
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
     print_logs(MAS_DEF_LVL, "add_file, chunks_number=%d\n", chunks_number);
@@ -103,50 +117,32 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
         strcpy(chunk->path, path);
         chunk->n_replicas = REPLICATION_FACTOR;
         chunk->replicas = (Replica **)malloc(REPLICATION_FACTOR * sizeof(Replica *));
+        int rand_ind = *replica_robin_index;
 
         // Replica *replicas[REPLICATION_FACTOR];
         for (int j = 0; j < REPLICATION_FACTOR; j++)
         {
-            
             Replica *replica = (Replica *)malloc(sizeof(Replica));
             replica__init(replica);
             
-            int rand_ind;
-            // rand_ind = 0;
-            // rand_ind = i % 2;
-
-            // if (j == 0 || j == 1)
-            //     rand_ind = i % 2;
-            // if (j == 2)
-            //     rand_ind = (i+1) % 2;
-
-
-            // if (j == 0)
-            //     rand_ind = i % 3;
-            // if (j = 1)
-            //     rand_ind = (i+1) % 3;
-            // if (j == 2)
-            //     rand_ind = (i+2) % 3;
-            
-            // if (j == 0 || j == 1)
-            //     rand_ind = 0;
-            // if (j == 2)
-            //     rand_ind = 1;
-
-            // NIE JEBANY RAND - MOŻE ON DAĆ TĘ SAMĄ REPLIKĘ JAKO WSZYSTKIE REPLIKI DANEGO CHUNKU
-
-            rand_ind = (i + j) % replicas_count;
-
-            // rand_ind = j;
+            while (!all_replicas[rand_ind]->isAlive)
+            {
+                printf("Replica %d is dead, incrementing rand_ind\n", rand_ind);
+                rand_ind = (rand_ind + 1) % replicas_count;
+            }
 
             replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
             strcpy(replica->ip, all_replicas[rand_ind]->ip);
             replica->port = all_replicas[rand_ind]->port;
-            replica->is_primary = (j == 0);
+            replica->is_primary = (j == 0); // TODO do we need this?
 
             chunk->replicas[j] = replica;
-            print_logs(MAS_DEF_LVL, "Chunkowi %d przydzielono replike %d\n", i, all_replicas[rand_ind]->port);
+            print_logs(MAS_DEF_LVL, "Chunkowi %d przydzielono replike nr %d, IP: %s, port: %d\n",
+                i, rand_ind, all_replicas[rand_ind]->ip, all_replicas[rand_ind]->port);
+            
+            rand_ind = (rand_ind + 1) % replicas_count;
         }
+        *replica_robin_index = (*replica_robin_index + 1) % replicas_count;
         
         chunk_list->chunks[i] = chunk;
     }
@@ -154,8 +150,15 @@ void add_file(char* path, int64_t size, int replicas_count, replica_info_t **all
     g_hash_table_insert(hash_table, strdup(path), chunk_list);
 }
 
-void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
+void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table)
 {
+    // int *replicas_count = &(replicas_data->replicas_count);
+    // replica_info_t **all_replicas = replicas_data->all_replicas;
+    int *replicas_count = &(replicas_data->replicas_count);
+    int *total_alive_replicas = &(replicas_data->total_alive_replicas);
+    int *replica_robin_index = &(replicas_data->replica_robin_index);
+    replica_info_t **all_replicas = replicas_data->all_replicas;
+
     char request_type = event_data->peer_data->buffer[0];
 
     print_logs(MAS_DEF_LVL, "request type: %c\n", request_type);
@@ -174,7 +177,7 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
             err_n_die("ups");
         print_logs(MAS_DEF_LVL, "fileRequestWrite->path: %s\n", fileRequestWrite->path);
         print_logs(MAS_DEF_LVL, "fileRequestWrite->size: %ld\n", fileRequestWrite->size);
-        add_file(fileRequestWrite->path, fileRequestWrite->size, *replicas_count, all_replicas, hash_table);
+        add_file(fileRequestWrite->path, fileRequestWrite->size, replicas_data, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
@@ -209,18 +212,45 @@ void process_request(int epoll_fd, event_data_t *event_data, int *replicas_count
         print_logs(MAS_DEF_LVL, "new replica request detected \n");
         NewReplica *replica = new_replica__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
 
-        print_logs(MAS_DEF_LVL, "ip: %s\n", replica->ip);
-        print_logs(MAS_DEF_LVL, "port: %d\n", replica->port);
+        for (int i = 0; i < *replicas_count; i++)
+        {
+
+            if (all_replicas[i]->isAlive && all_replicas[i]->port == replica->port 
+                    && strcmp(all_replicas[i]->ip, replica->ip) == 0)
+            {
+                print_logs(0, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
+                        all_replicas[i]->ip, all_replicas[i]->port);
+
+                print_logs(0, "Replicas count: %d\n", *replicas_count);
+                print_logs(0, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
+                return;
+            }
+            if (!all_replicas[i]->isAlive && all_replicas[i]->port == replica->port
+                && strcmp(all_replicas[i]->ip, replica->ip) == 0)
+            {
+                print_logs(0, "Replica IP: %s, port: %d will be registered back.\n", 
+                        all_replicas[i]->ip, all_replicas[i]->port);
+                break;
+            }
+        }
+
         // calloc()
         all_replicas[*replicas_count] = (replica_info_t *)malloc(sizeof(replica_info_t));
         all_replicas[*replicas_count]->ip = (char *)malloc(IP_LENGTH * sizeof(char)); // Allocating memory for IP
-
+        all_replicas[*replicas_count]->isAlive = true;
         strcpy(all_replicas[*replicas_count]->ip, replica->ip);
         all_replicas[*replicas_count]->port = replica->port;
         
-        (*replicas_count)++;
+        print_logs(0, "Replica IP: %s, port: %d registered.\n", 
+                all_replicas[*replicas_count]->ip, all_replicas[*replicas_count]->port);
 
-        print_logs(MAS_DEF_LVL, "new replica added\n");
+        (*replicas_count)++;
+        (*total_alive_replicas)++;
+        print_logs(0, "Replicas count: %d\n", *replicas_count);
+        print_logs(0, "Total alive replicas: %d\n", *total_alive_replicas);
+
+        // TODO free NewReplica probably !!!
+        new_replica__free_unpacked(replica, NULL);
     }
     else
     {
@@ -316,7 +346,7 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     print_logs(MAS_DEF_LVL, "Client configured, declared payload size: %d bytes\n", event_data->peer_data->payload_size);
 }
 
-void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, replica_info_t **all_replicas, GHashTable *hash_table)
+void handle_client(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table)
 {
     int client_socket = event_data->peer_data->client_socket;
     int bytes_read;
@@ -345,7 +375,7 @@ void handle_client(int epoll_fd, event_data_t *event_data, int *replicas_count, 
     event_data->peer_data->bytes_stored += bytes_read;
 
     if (event_data->peer_data->bytes_stored == event_data->peer_data->payload_size)
-        process_request(epoll_fd, event_data, replicas_count, all_replicas, hash_table);
+        process_request(epoll_fd, event_data, replicas_data, hash_table);
     else if (event_data->peer_data->bytes_stored > event_data->peer_data->payload_size)    /*multi-queries clients - TODO*/
         err_n_die("undefined");
 }
@@ -357,9 +387,9 @@ int main()
     int                 server_socket;
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
-    int                 replicas_count = 0;
     replica_info_t      *all_replicas[1000]; // these are all replicas master knows
 
+    replicas_data_t replicas_data = {0, 0, 0, all_replicas};
 
     // initialize_demo_replicas(all_replicas);
     server_setup(&server_socket, &epoll_fd, &event);
@@ -389,7 +419,7 @@ int main()
                 if (events[i].events & EPOLLIN)
                 {
                     print_logs(MAS_DEF_LVL, "client event EPOLLIN triggered\n");
-                    handle_client(epoll_fd, event_data, &replicas_count, all_replicas, hash_table);
+                    handle_client(epoll_fd, event_data, &replicas_data, hash_table);
                 }
                 else if (events[i].events & EPOLLOUT)
                 {

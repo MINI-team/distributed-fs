@@ -9,7 +9,6 @@
 
 int replica_port = 8080;
 char replica_ip[IP_LENGTH] = "127.0.0.1";
-
 // int current_connection_cnt = 0;
 int current_connection_id = -1;
 bool current_connections[MAX_CONNECTIONS];

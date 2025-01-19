@@ -159,7 +159,8 @@ typedef struct {
     int id;
     char *ip;
     int32_t port;
-    int stored_chunks;
+    int stored_chunks; // not needed?
+    bool isAlive;
 } replica_info_t;
 
 void err_n_die(const char *fmt, ...);
