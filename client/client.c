@@ -158,11 +158,10 @@ void put_chunk(void *voidPtr)
 
     write_len_and_data(replicafd, bytes_read, file_buf);
 
-    // close(replicafd);
-
     free(file_buf);
     free(proto_buf);
 
+#ifdef COMMIT
     print_logs(5, "Waiting for commit\n");
     uint32_t payload;
     uint8_t *buffer;
@@ -172,7 +171,7 @@ void put_chunk(void *voidPtr)
     timeout.tv_sec = TIMEOUT_SEC;
     timeout.tv_usec = TIMEOUT_MSEC;
 
-   if (setsockopt(replicafd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
+    if (setsockopt(replicafd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
         err_n_die("setsockopt timeout error");
 
     for (int i = 0; i < REPLICATION_FACTOR; i++)
@@ -192,7 +191,8 @@ void put_chunk(void *voidPtr)
             print_logs(0, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
     }
-    // w tym momencie, u repliki bedzie striggerowany EPOLLIN dla klienta i bytes_read = 0
+#endif
+
     close(replicafd);
 }
 
