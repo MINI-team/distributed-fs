@@ -174,6 +174,12 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     print_logs(REP_DEF_LVL, "handle_new_client_payload_declaration, bytes_read: %d\n", bytes_read);
     if (bytes_read < 0)
     {
+        if (errno == EPIPE || errno == ECONNRESET)
+        {
+            print_logs(1, "EPIPE/ECONNRESET in read, broken pipe\n");
+            disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
+            return;
+        }
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
             print_logs(REP_DEF_LVL, "EAGAIN/EWOULDBLOK\n");
@@ -297,12 +303,19 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
         &(event_data->peer_data->left_to_send)
     );
 
+
     if(peer_type == CLIENT_WRITE)
     {
         print_logs(0, "After bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
     }
     print_logs(REP_DEF_LVL, "poszlo bytes_written: %d, w sumie wyslano: %d; out_payload size to: %d\n",
      bytes_written, event_data->peer_data->bytes_sent, event_data->peer_data->out_payload_size);
+
+    if (bytes_written == -2)
+    {
+        disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
+        return;
+    }
 
     if (bytes_written == -1)
         return;
@@ -860,6 +873,8 @@ void register_to_master(int epoll_fd)
 
 int main(int argc, char **argv)
 {
+    signal(SIGPIPE, SIG_IGN);
+
     int server_socket, epoll_fd, running = 1;
     struct epoll_event events[MAX_EVENTS];
 

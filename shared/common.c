@@ -197,6 +197,11 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
                 print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
                 return -1;
             }
+            if (errno == EPIPE || errno == ECONNRESET)
+            {
+                print_logs(1, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
+                return -2;
+            }
             err_n_die("write error");
         }
 
