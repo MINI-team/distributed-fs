@@ -92,8 +92,9 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
 
     print_logs(MAS_DEF_LVL, "from now on it's EPOLLOUT\n");
 
+    if (!chunk_list->success)
+        free(chunk_list);
     free(buffer);
-    free(chunk_list);
 }
 
 void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table)
