@@ -55,6 +55,16 @@ void handle_new_connection(int epoll_fd, int server_socket)
 
 void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_list)
 {
+    if (!chunk_list)
+    {
+        print_logs(MAS_DEF_LVL, "Sending empty chunk_list\n");
+        chunk_list = (ChunkList *)malloc(sizeof(ChunkList));
+        chunk_list__init(chunk_list);
+        chunk_list->success  = false;
+        chunk_list->n_chunks = 0;
+        chunk_list->chunks = NULL;   
+    }
+    
     uint32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
     print_logs(MAS_DEF_LVL, "I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
     uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
@@ -83,6 +93,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     print_logs(MAS_DEF_LVL, "from now on it's EPOLLOUT\n");
 
     free(buffer);
+    free(chunk_list);
 }
 
 void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table)
@@ -177,9 +188,18 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             err_n_die("ups");
         print_logs(MAS_DEF_LVL, "fileRequestWrite->path: %s\n", fileRequestWrite->path);
         print_logs(MAS_DEF_LVL, "fileRequestWrite->size: %ld\n", fileRequestWrite->size);
-        add_file(fileRequestWrite->path, fileRequestWrite->size, replicas_data, hash_table);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
+        if (chunk_list)
+        {
+            print_logs(MAS_DEF_LVL, "File already exists\n");
+            setup_outbound(epoll_fd, event_data, NULL);
+            return;
+        }
+
+        add_file(fileRequestWrite->path, fileRequestWrite->size, replicas_data, hash_table);
+
+        chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
         {
             print_logs(MAS_DEF_LVL, "oho i hit client: %d\n", event_data->peer_data->client_socket);
@@ -189,6 +209,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         else
         {
             print_logs(MAS_DEF_LVL, "not found \n");
+            err_n_die("should never happen\n");
         }
     }
     else if (request_type == 'r')
@@ -200,10 +221,12 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         
         if (chunk_list)
         {
+            printf("it was null\n");
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
         {
+            setup_outbound(epoll_fd, event_data, chunk_list);
             print_logs(MAS_DEF_LVL, "not found \n");
         }
     }

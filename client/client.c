@@ -305,8 +305,11 @@ void do_read(char *path)
     read_payload_and_data(serverfd, &buffer, &payload);
 
     ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
-    if (!chunk_list)
+    if (!chunk_list) // TODO
         err_n_die("chunk_list is null");
+
+    if (!chunk_list->success)
+        err_n_die("FAIL: file does not exist\n"); // TODO add abort with cleanup, free everything
 
     close(serverfd);
 
@@ -358,9 +361,12 @@ void do_write(char *path)
     else
         print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
 
+    close(serverfd);
+
+    if (!chunk_list->success)
+        err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
     chunk_list_global = chunk_list;
 
-    close(serverfd);
 
 #ifdef DEBUG
     debug_log(debugfd, "chunk_list->n_chunks: %d\n", chunk_list->n_chunks);
