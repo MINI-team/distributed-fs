@@ -309,6 +309,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
     if (bytes_written == event_data->peer_data->out_payload_size)
     {
         print_logs(0, "WRITTEN to %s\n", peer_type_to_string(peer_type));
+#ifdef COMMIT
         switch (peer_type)
         {
         case CLIENT_READ:
@@ -353,11 +354,15 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
             err_n_die("peer_type is probably EL_PRIMO");
             break;
         }
+#else
+        disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
+#endif
     }
     
     else
         err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
     }
+    
 
 void processReadRequest(int epoll_fd, event_data_t *event_data, char *path, int id)
 {
@@ -465,7 +470,9 @@ void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int le
     print_logs(REP_DEF_LVL, "chunkname: %s\n", chunkname);
     write_to_disk(chunkname, data, length);
 
+#ifdef COMMIT
     prepare_local_write_ack(epoll_fd, event_data, peer_type);
+#endif
 }
 
 int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffer, event_data_t *true_client_event_data)
