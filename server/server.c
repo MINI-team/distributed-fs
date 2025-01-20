@@ -93,7 +93,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event_data->peer_data->client_socket, &event) < 0)
         err_n_die("unable to add EPOLLOUT");
 
-    print_logs(MAS_DEF_LVL, "from now on it's EPOLLOUT\n");
+    print_logs(MAS_DEF_LVL, "from now on it EPOLLOUT\n");
 
     if (!chunk_list->success)
         free(chunk_list);

@@ -220,42 +220,32 @@ void put_chunk_commit(void *voidPtr)
     chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
 
     for (int i = 0; i < args->n_replicas; i++)
+    {
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            print_logs(CLI_DEF_LVL, "i:%d\n", i);
+            print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
+                args->replicas[i]->port);
+            if ((ret = bulk_write(replicafd, &payload_size, sizeof(payload_size))) == -2 ||
+                (ret = bulk_write(replicafd, &op_type, 1)) == -2 ||
+                (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
+                (ret = write_len_and_data(replicafd, bytes_read, file_buf)) == -2)
+            {
+                print_logs(0, "Broken pipe, replica crashed\n");
+                continue;
+            }
             break;
         }
-
-    if (ret < 0)
-        err_n_die("each replica is dead");
-
-    /*
-        payload_size - 4 bytes
-        operation type - 1 byte
-        proto_buf length - 4 bytes
-        proto_buf - (proto_buf length) bytes
-        chunk content length - 4 bytes
-        chunk content - (chunk content length) bytes
-    */
-
-    bulk_write(replicafd, &payload_size, sizeof(payload_size));
-    print_logs(CLI_DEF_LVL, "to sie niby udalo\n");
-
-    write(replicafd, &op_type, 1);
-    
-    write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf);
-    print_logs(CLI_DEF_LVL, "to sie nie uda\n");
-
-    write_len_and_data(replicafd, bytes_read, file_buf);
+    }
 
     free(file_buf);
     free(proto_buf);
 
-#ifdef COMMIT
+    if (ret < 0)
+        err_n_die("each replica is dead");
+
     print_logs(5, "Waiting for commit\n");
     uint32_t payload;
     uint8_t *buffer;
-    // alert(5);
 
     struct timeval timeout;
     timeout.tv_sec = TIMEOUT_SEC;
@@ -281,7 +271,6 @@ void put_chunk_commit(void *voidPtr)
             print_logs(0, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
     }
-#endif
 
     close(replicafd);
 }
@@ -549,7 +538,7 @@ void do_write_commit(char *path)
 
 int main(int argc, char **argv)
 {
-    char operation[10]; //TODO refactor
+    char operation[20]; //TODO refactor
     char path[256];
 
 #ifdef DEBUG
@@ -588,9 +577,8 @@ int main(int argc, char **argv)
         do_read(path);
     else if (strcmp(operation, "write") == 0)
         do_write(path);
-    else if(strcmp(operation, "write-commit")==0)
+    else if(strcmp(operation, "write-committed")==0)
         do_write_commit(path);
     else
         err_n_die("usage: wrong client request");
-
 }

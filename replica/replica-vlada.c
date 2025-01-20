@@ -297,7 +297,7 @@ void writeChunkFile(int epoll_fd, const char *filepat, uint8_t *data, int length
     if ((fd = open(filepat, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0)
         err_n_die("filefd error");
 
-    printf("imo tu sie wyjebie\n");
+    printf("imo here it will fuck up xdd\n");
     if ((n = bulk_write(fd, data, length)) == -1)
         err_n_die("read error");
     close(fd);
