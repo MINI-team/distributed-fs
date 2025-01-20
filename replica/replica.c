@@ -222,32 +222,16 @@ void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_dat
     print_logs(REP_DEF_LVL, "Client configured, declared payload size: %d bytes\n", event_data->peer_data->payload_size);
 }
 
-void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname)
+void prepare_chunk_to_send(int epoll_fd, event_data_t *event_data, int64_t chunk_size, uint8_t* file_buf)
 {
-    int fd, bytes_read;
-    int64_t chunk_size;
-
-    if ((fd = open(chunkname, O_RDONLY)) == -1)
-        err_n_die("open error");
-
-    chunk_size = file_size(fd);
-
-    uint8_t* file_buf = (uint8_t *)malloc(chunk_size * sizeof(uint8_t));
-
-    if ((bytes_read = bulk_read(fd, file_buf, chunk_size)) !=  chunk_size)
-        err_n_die("putChunk read error");
-
-    print_logs(REP_DEF_LVL, "to ostatnie, bytes_read: %d\n", bytes_read);
-    // set_fd_blocking(event_data->peer_data->client_socket); // tego bardzo nie chcemy !!!!!!!!!!!!!!!!!!!!
-
     /*
-    musimy ustawic dwa pola
-    event_data->peer_data->out_payload_size 
-    event_data->peer_data->out_buffer
+        musimy ustawic dwa pola
+        event_data->peer_data->out_payload_size
+        event_data->peer_data->out_buffer
 
-    eout_buffer:
-    chunk_size: 4 bytes
-    file_buf: chunk_size bytes
+        eout_buffer:
+        chunk_size: 4 bytes
+        file_buf: chunk_size bytes
     */
 
     uint32_t chunk_net_size = htonl(chunk_size);
@@ -255,11 +239,11 @@ void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname
     event_data->peer_data->out_payload_size = out_payload_size;
     event_data->peer_data->out_buffer = (uint8_t *)malloc(out_payload_size * sizeof(uint8_t));
     memcpy(event_data->peer_data->out_buffer, &chunk_net_size, sizeof(uint32_t));
-    memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), file_buf, chunk_size);
+    if(file_buf != NULL)
+        memcpy(event_data->peer_data->out_buffer + sizeof(uint32_t), file_buf, chunk_size);
     event_data->peer_data->bytes_sent = 0;
     event_data->peer_data->left_to_send = out_payload_size;
     event_data->peer_type = CLIENT_READ;
-
 
     struct epoll_event event;
     event.events = EPOLLOUT | EPOLLIN;
@@ -269,6 +253,34 @@ void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname
         err_n_die("unable to add EPOLLOUT");
 
     free(file_buf);
+}
+
+void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname)
+{
+    int fd, bytes_read;
+    int64_t chunk_size;
+
+    if ((fd = open(chunkname, O_RDONLY)) == -1)
+    {
+        chunk_size = 0;
+        print_logs(0, "\nCHUNK NOT FOUND, I was probably dead when I was supposed to get it\n================\n");
+        // err_n_die("open error");
+        prepare_chunk_to_send(epoll_fd, event_data, chunk_size, NULL);
+    }
+    else
+    {
+        chunk_size = file_size(fd);
+
+        uint8_t* file_buf = (uint8_t *)malloc(chunk_size * sizeof(uint8_t));
+
+        if ((bytes_read = bulk_read(fd, file_buf, chunk_size)) !=  chunk_size)
+            err_n_die("putChunk read error");
+
+        print_logs(REP_DEF_LVL, "to ostatnie, bytes_read: %d\n", bytes_read);
+        // set_fd_blocking(event_data->peer_data->client_socket); // tego bardzo nie chcemy !!!!!!!!!!!!!!!!!!!!
+        prepare_chunk_to_send(epoll_fd, event_data, chunk_size, file_buf);
+    }
+
     close(fd);
 }
 
@@ -804,6 +816,16 @@ void handle_client(int epoll_fd, event_data_t *event_data)
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }
+    if (bytes_read < 0)
+    {
+        if (errno == ECONNRESET)
+        {
+            print_logs(0, "Client %d (%s) disconnected ABRUPTLY <--------------\n", client_socket, peer_type_to_string(event_data->peer_type));
+            disconnect_client(epoll_fd, event_data, client_socket);
+            return;
+        }
+        err_n_die("read error 798");
+    }
 
     // print_logs(REP_DEF_LVL, "handle_client, bytes_read: %d\n", bytes_read);
 
@@ -813,7 +835,7 @@ void handle_client(int epoll_fd, event_data_t *event_data)
     if (event_data->peer_data->bytes_stored == event_data->peer_data->payload_size)
         process_request(epoll_fd, event_data);
     else if (event_data->peer_data->bytes_stored > event_data->peer_data->payload_size) /*multi-queries clients - TODO*/
-        err_n_die("undefined");
+        err_n_die("undefined 816");
 }
 
 void register_to_master(int epoll_fd)

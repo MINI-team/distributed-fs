@@ -59,6 +59,7 @@ void get_chunk(void *voidPtr)
     op_type = 'r';
 
     for (int i = 0; i < args->n_replicas; i++)
+    {
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
             print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
@@ -73,8 +74,13 @@ void get_chunk(void *voidPtr)
                 continue;
             }
 
-            uint32_t chunk_content_len = ret;
+            if(ret == 0)
+            {
+                print_logs(0, "There is no such chunk on replica.\n");
+                continue;
+            }
 
+            uint32_t chunk_content_len = ret;
             uint8_t *buffer = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
             if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
             {
@@ -95,10 +101,14 @@ void get_chunk(void *voidPtr)
             
             break;
         }
-
+    }
+    // if (ret < 0)
+    //     err_n_die("each replica is dead");
     if (ret < 0)
-        err_n_die("each replica is dead");
-
+    {
+        print_logs(0, "hello from exit(1)\n");
+        exit(1);
+    }
     // setup_connection(&replicafd, args->ip, args->port);
     /*
         payload_size - 4 bytes
@@ -142,11 +152,26 @@ void put_chunk(void *voidPtr)
     chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
 
     for (int i = 0; i < args->n_replicas; i++)
+    {
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            print_logs(CLI_DEF_LVL, "i:%d\n", i);
+            print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
+                args->replicas[i]->port);
+            if ((ret = bulk_write(replicafd, &payload_size, sizeof(payload_size))) == -2 ||
+                (ret = bulk_write(replicafd, &op_type, 1)) == -2 ||
+                (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
+                (ret = write_len_and_data(replicafd, bytes_read, file_buf)) == -2)
+            {
+                print_logs(0, "Broken pipe, replica crashed\n");
+                continue;
+            }
             break;
         }
+    }
+
+    free(file_buf);
+    free(proto_buf);
+    close(replicafd);
 
     if (ret < 0)
         err_n_die("each replica is dead");
@@ -159,21 +184,6 @@ void put_chunk(void *voidPtr)
         chunk content length - 4 bytes
         chunk content - (chunk content length) bytes
     */
-
-    bulk_write(replicafd, &payload_size, sizeof(payload_size));
-    print_logs(CLI_DEF_LVL, "to sie niby udalo\n");
-
-    write(replicafd, &op_type, 1);
-    
-    write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf);
-    print_logs(CLI_DEF_LVL, "to sie nie uda\n");
-
-    write_len_and_data(replicafd, bytes_read, file_buf);
-
-    free(file_buf);
-    free(proto_buf);
-
-    close(replicafd);
 }
 
 void put_chunk_commit(void *voidPtr)
