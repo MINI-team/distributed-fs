@@ -7,12 +7,12 @@
 #include "common.h"
 #include "dfs.pb-c.h"
 
+int running = 1;
 int replica_port = 8080;
 char replica_ip[IP_LENGTH] = "127.0.0.1";
 // int current_connection_cnt = 0;
 int current_connection_id = -1;
 bool current_connections[MAX_CONNECTIONS];
-
 
 #define MAX_EVENTS 4096
 #define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
@@ -31,7 +31,7 @@ int set_fd_blocking(int fd)
     return 0; // Success
 }
 
-void server_setup(int *server_socket, int server_port, int *epoll_fd)
+void server_setup(event_data_t **server_event_data, int *server_socket, int server_port, int *epoll_fd)
 {
     struct sockaddr_in servaddr;
     struct epoll_event event;
@@ -59,15 +59,15 @@ void server_setup(int *server_socket, int server_port, int *epoll_fd)
     if ((*epoll_fd = epoll_create1(0)) < 0)
         err_n_die("epoll_create1 error");
 
-    event_data_t *server_event_data = (event_data_t *)malloc(sizeof(event_data_t));
+    *server_event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!server_event_data)
         err_n_die("malloc error");
 
-    server_event_data->is_server = 1;
-    server_event_data->server_socket = *server_socket;
+    (*server_event_data)->is_server = 1;
+    (*server_event_data)->server_socket = *server_socket;
 
     event.events = EPOLLIN;
-    event.data.ptr = server_event_data;
+    event.data.ptr = *server_event_data;
 
     if (epoll_ctl(*epoll_fd, EPOLL_CTL_ADD, *server_socket, &event) < 0)
         err_n_die("epoll_ctl error");
@@ -719,6 +719,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
         // REPLACE THIS <-----------------------------------------------------------
         // REPLACE THIS <-----------------------------------------------------------
         // REPLACE THIS <-----------------------------------------------------------
+        chunk_request__free_unpacked(chunkRequest, NULL);
         return;
     }
     else if (op_type == 'w' || op_type == 'd')
@@ -762,6 +763,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
         // {
 
         // }
+        chunk__free_unpacked(chunk, NULL);
     }
     else
         err_n_die("wrong operation type");
@@ -869,14 +871,22 @@ void register_to_master(int epoll_fd)
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, masterfd, &event) < 0)
         err_n_die("unable to add EPOLLOUT");
+
+    free(proto_buf);
+}
+
+
+void handle_sigint(int sig) 
+{
+    printf("\nCaught SIGINT, graceful shutdown...\n");
+    running = 0;
 }
 
 int main(int argc, char **argv)
 {
-    signal(SIGPIPE, SIG_IGN);
-
-    int server_socket, epoll_fd, running = 1;
-    struct epoll_event events[MAX_EVENTS];
+    int             server_socket, epoll_fd;
+    event_data_t    *server_event_data;
+    struct          epoll_event events[MAX_EVENTS];
 
     if (argc >= 3) // ./replica ip port
     {
@@ -888,8 +898,10 @@ int main(int argc, char **argv)
     {
         replica_port = atoi(argv[1]);
     }
-        
-    server_setup(&server_socket, replica_port, &epoll_fd);
+    
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGINT, handle_sigint);    
+    server_setup(&server_event_data, &server_socket, replica_port, &epoll_fd);
     register_to_master(epoll_fd);
 
     while (running)
@@ -930,4 +942,14 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, server_socket, NULL))
+        err_n_die("epoll_ctl error");
+
+    free(server_event_data);
+
+    close(server_socket);
+    close(epoll_fd);
+
+    return 0;
 }
