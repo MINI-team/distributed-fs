@@ -8,8 +8,12 @@
 #include "dfs.pb-c.h"
 
 int running = 1;
+
+int master_port = 9001;
+char master_ip[IP_LENGTH] = "127.0.0.1";
 int replica_port = 8080;
 char replica_ip[IP_LENGTH] = "127.0.0.1";
+
 // int current_connection_cnt = 0;
 int current_connection_id = -1;
 bool current_connections[MAX_CONNECTIONS];
@@ -31,7 +35,8 @@ int set_fd_blocking(int fd)
     return 0; // Success
 }
 
-void server_setup(event_data_t **server_event_data, int *server_socket, int server_port, int *epoll_fd)
+void server_setup(event_data_t **server_event_data, int *server_socket, char *server_ip,
+        int server_port, int *epoll_fd)
 {
     struct sockaddr_in servaddr;
     struct epoll_event event;
@@ -45,7 +50,11 @@ void server_setup(event_data_t **server_event_data, int *server_socket, int serv
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (inet_pton(AF_INET, server_ip, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error - invalid address");
+
     servaddr.sin_port = htons(server_port);
 
     if (bind(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
@@ -823,7 +832,7 @@ void register_to_master(int epoll_fd)
 
     // buffer[0] = 'n';
 
-    ret = setup_connection_retry(&masterfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    ret = setup_connection_retry(&masterfd, master_ip, master_port);
     if (ret < 0)
     {
         print_logs(REP_DEF_LVL, "skipping this replica\n");
@@ -888,7 +897,22 @@ int main(int argc, char **argv)
     event_data_t    *server_event_data;
     struct          epoll_event events[MAX_EVENTS];
 
-    if (argc >= 3) // ./replica ip port
+#ifdef RELEASE
+    if (argc != 5)
+        err_n_die("Error: Invalid parameters. Please provide the Master IP, Master port, Replica IP, and Replica port.");
+    strcpy(master_ip, argv[1]);
+    master_port = atoi(argv[2]);
+    strcpy(replica_ip, argv[3]);
+    replica_port = atoi(argv[4]);
+#else
+    if (argc == 5) // /.replica master_ip master_port replica_ip replica_port
+    {
+        strcpy(master_ip, argv[1]);
+        master_port = atoi(argv[2]);
+        strcpy(replica_ip, argv[3]);
+        replica_port = atoi(argv[4]);
+    }
+    if (argc == 3) // ./replica ip port
     {
         // replica_ip = argv[1];
         strcpy(replica_ip, argv[1]);
@@ -898,15 +922,17 @@ int main(int argc, char **argv)
     {
         replica_port = atoi(argv[1]);
     }
-    
+#endif    
+
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, handle_sigint);    
-    server_setup(&server_event_data, &server_socket, replica_port, &epoll_fd);
+    server_setup(&server_event_data, &server_socket, replica_ip, replica_port, &epoll_fd);
     register_to_master(epoll_fd);
 
     while (running)
     {
-        //print_logs(REP_DEF_LVL, "\n Replica %d polling for events \n", replica_port);
+        print_logs(0, "\n Replica IP: %s, port: %d polling for events \n",
+                replica_ip, replica_port);
 
         // MAX_EVENTS: 1000, przyjdzie na raz 30
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); // connect
