@@ -131,7 +131,7 @@ void handle_new_connection(int epoll_fd, int server_socket)
     event.events = EPOLLIN;
     event.data.ptr = peer_event_data;
 
-    print_logs(0, "New client connected, id %d\n", peer_data->connection_id);
+    print_logs(3, "New client connected, id %d\n", peer_data->connection_id);
 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event))
         err_n_die("epoll_ctl error");
@@ -148,7 +148,7 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
     // current_connection_cnt--;
     current_connections[event_data->peer_data->connection_id] = false;
 
-    print_logs(0, "disconnect_client, setting connection %d with peer as false\n",
+    print_logs(3, "disconnect_client, setting connection %d with peer as false\n",
         event_data->peer_data->connection_id);
 
     if (event_data->peer_data->buffer)
@@ -168,7 +168,7 @@ void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket
     free(event_data);
     event_data = NULL;
 
-    print_logs(0, "freeing every structure (event_data and members) of client (socket %d) and setting them as NULL\n", client_socket);
+    print_logs(3, "freeing every structure (event_data and members) of client (socket %d) and setting them as NULL\n", client_socket);
 
     close(client_socket);
 }
@@ -263,7 +263,7 @@ void readChunkFile(int epoll_fd, event_data_t *event_data, const char *chunkname
     if ((fd = open(chunkname, O_RDONLY)) == -1)
     {
         chunk_size = 0;
-        print_logs(0, "\nCHUNK NOT FOUND, I was probably dead when I was supposed to get it\n================\n");
+        print_logs(3, "\nCHUNK NOT FOUND, I was probably dead when I was supposed to get it\n================\n");
         // err_n_die("open error");
         prepare_chunk_to_send(epoll_fd, event_data, chunk_size, NULL);
     }
@@ -315,7 +315,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
 
     if (peer_type == CLIENT_WRITE)
     {
-        print_logs(0, "Before bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
+        print_logs(3, "Before bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
     }
 
     int bytes_written = bulk_write_nonblock(event_data->peer_data->client_socket,
@@ -327,7 +327,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
 
     if(peer_type == CLIENT_WRITE)
     {
-        print_logs(0, "After bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
+        print_logs(3, "After bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
     }
     print_logs(REP_DEF_LVL, "poszlo bytes_written: %d, w sumie wyslano: %d; out_payload size to: %d\n",
      bytes_written, event_data->peer_data->bytes_sent, event_data->peer_data->out_payload_size);
@@ -342,7 +342,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
         return;
     if (bytes_written == event_data->peer_data->out_payload_size)
     {
-        print_logs(0, "WRITTEN to %s\n", peer_type_to_string(peer_type));
+        print_logs(3, "WRITTEN to %s\n", peer_type_to_string(peer_type));
         switch (peer_type)
         {
         case CLIENT_READ:
@@ -575,9 +575,9 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
         event.events = EPOLLOUT | EPOLLIN;
         event.data.ptr = event_data;
 
-        // print_logs(0, "Primary replica goes to sleep!!!\n");
+        // print_logs(3, "Primary replica goes to sleep!!!\n");
         // sleep(5);
-        // print_logs(0, "Primary replica wakes up!!!\n\n");
+        // print_logs(3, "Primary replica wakes up!!!\n\n");
 
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, replicafd, &event) < 0)
             err_n_die("unable to add EPOLLOUT");
@@ -620,7 +620,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
     if (event_data->peer_type == REPLICA_SECUNDO)
     {
-        print_logs(0, "\n===================\nRECEIVED ACKNOWLEDGEMENT FROM SECONDARY\n\n");
+        print_logs(3, "\n===================\nRECEIVED ACKNOWLEDGEMENT FROM SECONDARY\n\n");
 
                 // handle this
 
@@ -639,18 +639,18 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         if (!event_data_with_client)
         {
-            print_logs(0, "event_data_with_client is NULL !!!!\n");
+            print_logs(3, "event_data_with_client is NULL !!!!\n");
             return;
         }
         if (!(event_data_with_client->peer_data))
         {
-            print_logs(0, "event_data_with_client->peer_data is NULL !!!!\n");
+            print_logs(3, "event_data_with_client->peer_data is NULL !!!!\n");
             return;
         }
 
         if (!current_connections[event_data_with_client->peer_data->connection_id])
         {
-            print_logs(0, "lost connection with peer(client), id %d\ntherefore can't send ack\n\n\n",
+            print_logs(3, "lost connection with peer(client), id %d\ntherefore can't send ack\n\n\n",
                        event_data_with_client->peer_data->connection_id);
 
             return;
@@ -659,12 +659,12 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         if (!(event_data_with_client->peer_data->out_buffer))
         {
-            print_logs(0, "event_data_with_client out_buffer is NULL !!!!\n");
+            print_logs(3, "event_data_with_client out_buffer is NULL !!!!\n");
             return;
         }
         if (!(event_data->peer_data))
         {
-            print_logs(0, "peer_data with replica is NULL !!!!\n");
+            print_logs(3, "peer_data with replica is NULL !!!!\n");
             return;
         }
 
@@ -704,7 +704,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
                       event_data_with_client->peer_data->client_socket, &event) < 0)
             err_n_die("unable to add EPOLLOUT 512");
             
-        print_logs(0, "ACK FROM replica ready to be written\n");
+        print_logs(3, "ACK FROM replica ready to be written\n");
         return;
     }
 
@@ -806,7 +806,7 @@ void handle_client(int epoll_fd, event_data_t *event_data)
 
     if (bytes_read == 0)
     {
-        print_logs(0, "Client %d (%s) disconnected \n", client_socket, peer_type_to_string(event_data->peer_type));
+        print_logs(3, "Client %d (%s) disconnected \n", client_socket, peer_type_to_string(event_data->peer_type));
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }
@@ -814,11 +814,19 @@ void handle_client(int epoll_fd, event_data_t *event_data)
     {
         if (errno == ECONNRESET)
         {
-            print_logs(0, "Client %d (%s) disconnected ABRUPTLY <--------------\n", client_socket, peer_type_to_string(event_data->peer_type));
+            print_logs(3, "Client %d (%s) disconnected ABRUPTLY <--------------\n", client_socket, peer_type_to_string(event_data->peer_type));
             disconnect_client(epoll_fd, event_data, client_socket);
             return;
         }
-        err_n_die("read error 798");
+        else
+        {
+            print_logs(0, "ERRNO code: %d and msg: %s\n\n\n", errno, strerror(errno));
+            print_logs(3, "Client %d (%s) disconnected ABRUPTLY <--------------\n", client_socket, peer_type_to_string(event_data->peer_type));
+            disconnect_client(epoll_fd, event_data, client_socket);
+            return;
+            // TODO read error inspection needed!!!
+            // err_n_die("read error 798");
+        }
     }
 
     // print_logs(REP_DEF_LVL, "handle_client, bytes_read: %d\n", bytes_read);
@@ -947,7 +955,7 @@ int main(int argc, char **argv)
 
     while (running)
     {
-        print_logs(0, "\n Replica IP: %s, port: %d polling for events \n",
+        print_logs(3, "\n Replica IP: %s, port: %d polling for events \n",
                 replica_ip, replica_port);
 
         // MAX_EVENTS: 1000, przyjdzie na raz 30
@@ -959,7 +967,7 @@ int main(int argc, char **argv)
 
             if (event_data->is_server)
             {
-                print_logs(0, "server event - new peer wants to connect\n");
+                print_logs(3, "server event - new peer wants to connect\n");
                 handle_new_connection(epoll_fd, server_socket);
             }
             else

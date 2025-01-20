@@ -21,8 +21,10 @@ typedef struct argsThread
     int64_t offset;
     int filefd;
 
-    int64_t filesize; // for deubug reasons, to be deleted
+    int64_t filesize; // for debug reasons, to be deleted
 
+    Chunk **uncommitted_chunks; // array of Chunk pointers, each by default set to NULL
+    
 } argsThread_t;
 
 typedef struct thread_pool_args
@@ -35,7 +37,7 @@ typedef struct thread_pool_args
     argsThread_t *argsThread;
     bool work_taken;
     bool work_finished;
-    void (*process_chunk)(void *); // put_chunk or get_chunk
+    void (*process_chunk)(void *); // put_chunk or get_chunk or put_chunk_committed
 
 } thread_pool_args_t;
 

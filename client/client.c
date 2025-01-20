@@ -70,13 +70,13 @@ void get_chunk(void *voidPtr)
                 (ret = write_len_and_data(replicafd, len_chunkRequest, proto_buf)) == -2 ||
                 (ret = read_payload_size(replicafd, NULL)) == -2)
             {
-                print_logs(0, "Broken pipe, replica crashed\n");
+                print_logs(3, "Broken pipe, replica crashed\n");
                 continue;
             }
 
             if(ret == 0)
             {
-                print_logs(0, "There is no such chunk on replica.\n");
+                print_logs(3, "There is no such chunk on replica.\n");
                 continue;
             }
 
@@ -85,7 +85,7 @@ void get_chunk(void *voidPtr)
             if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
             {
                 // err_n_die("bulk_read error for chunk_id: %d, bytes_read: %d, payload: %d\n", args->chunk_id, bytes_read , chunk_content_len);
-                print_logs(0, "bytes_read: %d != chunk_content_len: %d", bytes_read, chunk_content_len);
+                print_logs(3, "bytes_read: %d != chunk_content_len: %d", bytes_read, chunk_content_len);
                 ret = -2;
                 continue;
             }
@@ -106,7 +106,7 @@ void get_chunk(void *voidPtr)
     //     err_n_die("each replica is dead");
     if (ret < 0)
     {
-        print_logs(0, "hello from exit(1)\n");
+        print_logs(3, "hello from exit(1)\n");
         exit(1);
     }
     // setup_connection(&replicafd, args->ip, args->port);
@@ -162,7 +162,7 @@ void put_chunk(void *voidPtr)
                 (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
                 (ret = write_len_and_data(replicafd, bytes_read, file_buf)) == -2)
             {
-                print_logs(0, "Broken pipe, replica crashed\n");
+                print_logs(3, "Broken pipe, replica crashed\n");
                 continue;
             }
             break;
@@ -186,6 +186,48 @@ void put_chunk(void *voidPtr)
     */
 }
 
+void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ack, Chunk **uncommitted_chunks, int chunk_id, char *path)
+{
+    int fail_cnt = 0;
+    for (int i = 0; i < REPLICATION_FACTOR; i++)
+    {
+        if (!replicas_ack[i])
+            fail_cnt++;
+    }
+
+    if(fail_cnt == 0)
+        return;
+
+    Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
+    chunk__init(chunk);
+    uncommitted_chunks[chunk_id] = chunk;
+
+    chunk->n_replicas = fail_cnt;
+    chunk->replicas = (Replica **)malloc(fail_cnt * sizeof(Replica *));
+    chunk->chunk_id = chunk_id;
+    chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char));
+    strcpy(chunk->path, path);
+
+    int j = 0;
+    for (int i = 0; i < REPLICATION_FACTOR; i++)
+    {
+        if (!replicas_ack[i])
+        {
+            Replica *replica = (Replica *)malloc(sizeof(Replica));
+            replica__init(replica);
+            chunk->replicas[j] = replica;
+
+            replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
+            strcpy(replica->ip, replicas_from_master[i]->ip);
+            // replica->ip = replicas_from_master[i]->ip; TODO inspect if this is really wrong
+            replica->port = replicas_from_master[i]->port;
+            replica->is_primary = replicas_from_master[i]->is_primary; // TODO REMOVE THIS TROLLING
+
+            j++;
+        }
+    }
+}
+
 void put_chunk_commit(void *voidPtr)
 {
     // sleep(1);
@@ -196,7 +238,7 @@ void put_chunk_commit(void *voidPtr)
     struct sockaddr_in repladdr;
     argsThread_t *args = voidPtr;
     uint8_t op_type;
-    // char file_buf[CHUNK_SIZE + 1]; 
+    bool replicas_ack[REPLICATION_FACTOR] = {false};
 
     uint8_t* file_buf = (uint8_t *)malloc(CHUNK_SIZE * sizeof(uint8_t));
 
@@ -230,18 +272,18 @@ void put_chunk_commit(void *voidPtr)
                 (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
                 (ret = write_len_and_data(replicafd, bytes_read, file_buf)) == -2)
             {
-                print_logs(0, "Broken pipe, replica crashed\n");
+                print_logs(3, "Broken pipe, replica crashed\n");
                 continue;
             }
             break;
         }
     }
 
-    free(file_buf);
-    free(proto_buf);
+        free(file_buf);
+        free(proto_buf);
 
     if (ret < 0)
-        err_n_die("each replica is dead");
+        err_n_die("each replica is dead"); // TODO: don't die send this to master
 
     print_logs(5, "Waiting for commit\n");
     uint32_t payload;
@@ -256,7 +298,7 @@ void put_chunk_commit(void *voidPtr)
 
     for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
-        // TO ADD: use timeout = read_payload....
+        // TO ADD: use timeout = read_payload....;
         if(read_payload_and_data(replicafd, &buffer, &payload) == true)
         {
             print_logs(1, "Timeout for replica %d\n", i);
@@ -265,12 +307,33 @@ void put_chunk_commit(void *voidPtr)
         }
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
-            print_logs(0, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
+        {
+            print_logs(3, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
-        else
-            print_logs(0, "Received chunk commit report for %d replica, fail for IP:%s, port: %d\n",
+            for (int j = 0; j < REPLICATION_FACTOR; j++)
+            {
+
+                // printf("args->replicas[j]->ip: %s\n", args->replicas[j]->ip);
+                // printf("chunk_commit_report->ip: %s\n", chunk_commit_report->ip);
+                // printf("args->replicas[j]->port: %d\n", args->replicas[j]->port);
+                // printf("chunk_commit_report->port: %d\n", chunk_commit_report->port);
+
+                if (strcmp(args->replicas[j]->ip, chunk_commit_report->ip) == 0
+                    && args->replicas[j]->port == chunk_commit_report->port)
+                {
+                    replicas_ack[j] = true;
+                    break;
+                }
+            }
+        }
+        else // SHOULD HANDLE THIS - replica has too little disk space
+        {
+            err_n_die("Replica sent malicious message - Received chunk commit report for %d replica, FAIL for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
+        }
     }
+
+    prepare_uncommitted_chunk(args->replicas, replicas_ack, args->uncommitted_chunks, args->chunk_id, args->path);
 
     close(replicafd);
 }
@@ -308,7 +371,8 @@ void *thread_work(void *data)
     return NULL;
 }
 
-void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args, ChunkList *chunk_list, char *path, int filefd)
+void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args, 
+        ChunkList *chunk_list, char *path, int filefd, Chunk **uncommitted_chunks)
 {
         pthread_t tid[MAX_THREADS_COUNT];
 
@@ -327,6 +391,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
 
         argsThread[i].offset = (int64_t) i * CHUNK_SIZE;
         argsThread[i].filefd = filefd;
+        argsThread[i].uncommitted_chunks = uncommitted_chunks;
     }
 
     for (int i = 0; i < chunk_list->n_chunks; i++)
@@ -355,7 +420,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
         if (pthread_join(tid[i], NULL) != 0)
             err_n_die("pthread_join error");
 
-    print_logs(0, "All threads joined \n");
+    print_logs(3, "All threads joined \n");
 }
 
 void do_read(char *path)
@@ -397,7 +462,7 @@ void do_read(char *path)
     thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
                         -1, argsThread, true, false, get_chunk};
 
-    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd);
+    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, NULL);
 
     free(argsThread);   
 }
@@ -464,7 +529,7 @@ void do_write(char *path)
     thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
                         -1, argsThread, true, false, put_chunk};
 
-    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd);
+    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, NULL);
 
     free(argsThread);
 }
@@ -531,7 +596,29 @@ void do_write_commit(char *path)
     thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
                         -1, argsThread, true, false, put_chunk_commit};
 
-    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd);
+    Chunk **uncommited_chunks = (Chunk **)malloc(chunk_list->n_chunks * sizeof(Chunk *));
+
+    for (int i = 0; i < chunk_list->n_chunks; i++)
+        uncommited_chunks[i] = NULL;
+
+    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, uncommited_chunks);
+
+    for(int i = 0; i < chunk_list->n_chunks; i++)
+    {
+        if(uncommited_chunks[i])
+        {
+            print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", i, uncommited_chunks[i]->n_replicas);
+            for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
+            {
+                print_logs(1, "IP: %s, Port: %d\n", 
+                    uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
+            }
+        }
+        else
+        {
+            print_logs(1, "\nChunk %d fully commited\n", i);
+        }
+    }
 
     free(argsThread);
 }

@@ -110,7 +110,7 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
     if (total_alive_replicas < REPLICATION_FACTOR)
     {
         // TODO disconnect the client 
-        print_logs(0, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
+        print_logs(3, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
         return;
     }
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
@@ -245,17 +245,17 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             if (all_replicas[i]->isAlive && all_replicas[i]->port == replica->port 
                     && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(0, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
+                print_logs(3, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
                         all_replicas[i]->ip, all_replicas[i]->port);
 
-                print_logs(0, "Replicas count: %d\n", *replicas_count);
-                print_logs(0, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
+                print_logs(3, "Replicas count: %d\n", *replicas_count);
+                print_logs(3, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
                 return;
             }
             if (!all_replicas[i]->isAlive && all_replicas[i]->port == replica->port
                 && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(0, "Replica IP: %s, port: %d will be registered back.\n", 
+                print_logs(3, "Replica IP: %s, port: %d will be registered back.\n", 
                         all_replicas[i]->ip, all_replicas[i]->port);
                 break;
             }
@@ -268,13 +268,13 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         strcpy(all_replicas[*replicas_count]->ip, replica->ip);
         all_replicas[*replicas_count]->port = replica->port;
         
-        print_logs(0, "Replica IP: %s, port: %d registered.\n", 
+        print_logs(3, "Replica IP: %s, port: %d registered.\n", 
                 all_replicas[*replicas_count]->ip, all_replicas[*replicas_count]->port);
 
         (*replicas_count)++;
         (*total_alive_replicas)++;
-        print_logs(0, "Replicas count: %d\n", *replicas_count);
-        print_logs(0, "Total alive replicas: %d\n", *total_alive_replicas);
+        print_logs(3, "Replicas count: %d\n", *replicas_count);
+        print_logs(3, "Total alive replicas: %d\n", *total_alive_replicas);
 
         // TODO free NewReplica probably !!!
         new_replica__free_unpacked(replica, NULL);
@@ -442,7 +442,7 @@ int main(int argc, char **argv)
 
     while (running) 
     {
-        print_logs(0, "\n Master IP: %s, port: %d polling for events \n",
+        print_logs(3, "\n Master IP: %s, port: %d polling for events \n",
                 master_ip, master_port);
         
         // MAX_EVENTS: 1000, przyjdzie na raz 30 

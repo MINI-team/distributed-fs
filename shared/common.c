@@ -198,7 +198,7 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
             }
             if (errno == EPIPE || errno == ECONNRESET)
             {
-                print_logs(0, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
+                print_logs(3, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
                 return -2;
             }
             err_n_die("write error");
@@ -233,7 +233,7 @@ int read_payload_size(int fd, bool *timeout)
         }
         else if (errno == EPIPE || errno == ECONNRESET) // TODO read shouldn't result in EPIPE
         {
-            print_logs(0, "EPIPE/ECONNRESET in bulk_read, broken pipe\n");
+            print_logs(3, "EPIPE/ECONNRESET in bulk_read, broken pipe\n");
             return -2;
         }
         err_n_die("read error 230");

@@ -67,17 +67,17 @@
 
 #define DEBUG
 
-#define LOG_LEVEL 6
+#define LOG_LEVEL 1
 
 // #define COM_DEF_LVL 7
 // #define MAS_DEF_LVL 6
 // #define REP_DEF_LVL 7
 // #define CLI_DEF_LVL 7
 
-#define COM_DEF_LVL 0
-#define MAS_DEF_LVL 0
-#define REP_DEF_LVL 0
-#define CLI_DEF_LVL 0
+#define COM_DEF_LVL 7
+#define MAS_DEF_LVL 1
+#define REP_DEF_LVL 1
+#define CLI_DEF_LVL 7
 
 // #define CHUNK_SIZE 4096
 // #define CHUNK_SIZE 4096
@@ -94,8 +94,8 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-// #define MAX_THREADS_COUNT 1
-#define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
+#define MAX_THREADS_COUNT 1
+// #define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
 #define TIMEOUT_SEC 3
 #define TIMEOUT_MSEC 0
 
