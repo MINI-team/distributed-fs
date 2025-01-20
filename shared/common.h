@@ -31,7 +31,7 @@
 
 // #define DOCKER
 
-#define RELEASE
+// #define RELEASE
 
 #ifdef DOCKER
 #define MASTER_SERVER_IP "server_container"
@@ -173,14 +173,14 @@ char *resolve_host(char *host_name);
 void debug_log(FILE *debugfd, const char *fmt, ...);
 
 int bulk_read(int fd, void *buf, int count);
-uint32_t read_payload_size(int fd, bool *timeout);
-ssize_t bulk_write(int fd, const void *buf, size_t count);
+int read_payload_size(int fd, bool *timeout);
+int bulk_write(int fd, const void *buf, int count);
 // int bulk_write_nonblock(peer_data_t *peer_data);
 int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send);
 
 void abort_with_cleanup(char *msg, int serverfd);
 bool read_payload_and_data(int serverfd, uint8_t **buffer, uint32_t *payload);
-void write_len_and_data(int fd, uint32_t len, uint8_t *data);
+int write_len_and_data(int fd, uint32_t len, uint8_t *data);
 
 void setup_connection(int *server_socket, char *ip, uint16_t port);
 int setup_connection_retry(int *server_socket, char *ip, uint16_t port);

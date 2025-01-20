@@ -125,30 +125,29 @@ int bulk_read(int fd, void *buf, int count)
 //     return len;
 // }
 
-ssize_t bulk_write(int fd, const void *buf, size_t count)
+int bulk_write(int fd, const void *buf, int count)
 {
     print_logs(COM_DEF_LVL, "count: %zu\n", count);
 
     const unsigned char *p = buf;  // safer for pointer arithmetic
-    ssize_t total_written  = 0;
+    int total_written  = 0;
 
     while (count > 0)
     {
-        ssize_t c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
+        int c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
         print_logs(COM_DEF_LVL, "bulk_write: po write, c = %d\n", c);
         if (c < 0) {
-            // If interrupted by a signal, you might want to continue
-            if (errno == EINTR) {
-                continue;  // just retry
+            
+            if (errno == EPIPE || errno == ECONNRESET)
+            {
+                return -2;
             }
-            // Otherwise, report error and return
-            fprintf(stderr, "write() failed: %s\n", strerror(errno));
-            return -1;
+            err_n_die("bulk_write error");
         }
-        // c == 0 would mean no more can be written (e.g. broken pipe)
         if (c == 0) {
             fprintf(stderr, "No more data could be written.\n");
-            return total_written;
+            return -2;
+            // return total_written;
         }
         p             += c;
         total_written += c;
@@ -199,7 +198,7 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
             }
             if (errno == EPIPE || errno == ECONNRESET)
             {
-                print_logs(1, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
+                print_logs(0, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
                 return -2;
             }
             err_n_die("write error");
@@ -218,10 +217,10 @@ void abort_with_cleanup(char *msg, int serverfd)
     exit(1);
 }
 
-uint32_t read_payload_size(int fd, bool *timeout)
+int read_payload_size(int fd, bool *timeout)
 {
     /* We expect that first four bytes coming should be an integer declaring payload */
-    uint32_t net_payload;
+    int net_payload;
     int bytes_read;
     // print_logs(COM_DEF_LVL, "wejdzie\n");
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
@@ -232,12 +231,18 @@ uint32_t read_payload_size(int fd, bool *timeout)
             *timeout = true;
             return 0;
         }
+        else if (errno == EPIPE || errno == ECONNRESET) // TODO read shouldn't result in EPIPE
+        {
+            print_logs(0, "EPIPE/ECONNRESET in bulk_read, broken pipe\n");
+            return -2;
+        }
         err_n_die("read error 230");
     }
     print_logs(COM_DEF_LVL, "bytes_read: %d\n", bytes_read);
     // print_logs(COM_DEF_LVL, "a to nie wejdzie\n");
     if (bytes_read != sizeof(net_payload))
-        abort_with_cleanup("Sever sent incomplete payload size\n Try again\n", fd);
+        // abort_with_cleanup("Server sent incomplete payload size\n Try again\n", fd);
+        return -2;
 
     return ntohl(net_payload);
 }
@@ -263,25 +268,26 @@ bool read_payload_and_data(int fd, uint8_t **buffer, uint32_t *payload)
     return false;
 }
 
-void write_len_and_data(int fd, uint32_t len, uint8_t *data)
+int write_len_and_data(int fd, uint32_t len, uint8_t *data)
 {
     int net_len = htonl(len), sent;
 
     if((sent = bulk_write(fd, &net_len, sizeof(net_len))) != (int)sizeof(net_len))
+    {
+        if (sent == -2)
+            return -2;
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
-                  sent, (int)sizeof(net_len));
+            sent, (int)sizeof(net_len));
+    }
 
-    // print_logs(COM_DEF_LVL, "writing to replica OK\nwrote %d (/%d) bytes\n", sent, (int)sizeof(net_len));
     if ((sent = bulk_write(fd, data, len)) != len)
     {
-        print_logs(COM_DEF_LVL, "no i sie nie udalo\n");
+        if (sent == -2)
+            return -2;
         err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
-    else
-    {
-        print_logs(COM_DEF_LVL, "write_len_and_data_succeeded\n");
-    }
+    return sent;
 }
 
 void setup_connection(int *server_socket, char *ip, uint16_t port)

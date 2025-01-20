@@ -62,7 +62,37 @@ void get_chunk(void *voidPtr)
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
             print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
-             args->replicas[i]->port);
+                    args->replicas[i]->port);
+
+            if ((ret = bulk_write(replicafd, &payload_size, sizeof(payload_size))) == -2 || 
+                (ret = bulk_write(replicafd, &op_type, 1)) == -2 ||
+                (ret = write_len_and_data(replicafd, len_chunkRequest, proto_buf)) == -2 ||
+                (ret = read_payload_size(replicafd, NULL)) == -2)
+            {
+                print_logs(0, "Broken pipe, replica crashed\n");
+                continue;
+            }
+
+            uint32_t chunk_content_len = ret;
+
+            uint8_t *buffer = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
+            if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
+            {
+                // err_n_die("bulk_read error for chunk_id: %d, bytes_read: %d, payload: %d\n", args->chunk_id, bytes_read , chunk_content_len);
+                print_logs(0, "bytes_read: %d != chunk_content_len: %d", bytes_read, chunk_content_len);
+                ret = -2;
+                continue;
+            }
+
+            int pw_bytes_written;
+            if ((pw_bytes_written = pwrite(args->filefd, buffer, chunk_content_len, args->offset)) < 0)
+                err_n_die("pwrite error");
+
+            close(replicafd);
+
+            free(proto_buf);
+            free(buffer);
+            
             break;
         }
 
@@ -76,30 +106,77 @@ void get_chunk(void *voidPtr)
         proto_buf length - 4 bytes
         proto_buf - (proto_buf length) bytes
     */
-
-    bulk_write(replicafd, &payload_size, sizeof(payload_size));
-
-    write(replicafd, &op_type, 1);
-
-    write_len_and_data(replicafd, len_chunkRequest, proto_buf);
-
-    uint32_t chunk_content_len = read_payload_size(replicafd, NULL);
-
-    uint8_t *buffer = (uint8_t *)malloc(chunk_content_len * sizeof(uint8_t));
-    if ((bytes_read = bulk_read(replicafd, buffer, chunk_content_len)) != chunk_content_len)
-        err_n_die("bulk_read error for chunk_id: %d, bytes_read: %d, payload: %d\n", args->chunk_id, bytes_read , chunk_content_len); // here my app crashes
-
-    int pw_bytes_written;
-    if ((pw_bytes_written = pwrite(args->filefd, buffer, chunk_content_len, args->offset)) < 0)
-        err_n_die("pwrite error");
-
-    close(replicafd);
-
-    free(proto_buf);
-    free(buffer);
 }
 
 void put_chunk(void *voidPtr)
+{
+    // sleep(1);
+    int k;
+    // print_logs(CLI_DEF_LVL, "hello\n");
+    int replicafd, net_len, ret = -1;
+    size_t bytes_read, proto_len;
+    struct sockaddr_in repladdr;
+    argsThread_t *args = voidPtr;
+    uint8_t op_type;
+    // char file_buf[CHUNK_SIZE + 1]; 
+
+    uint8_t* file_buf = (uint8_t *)malloc(CHUNK_SIZE * sizeof(uint8_t));
+
+    if ((bytes_read = pread(args->filefd, file_buf, CHUNK_SIZE, args->offset)) < 0)
+        err_n_die("put_chunk read error");
+
+    int modulo = debug_file_size % CHUNK_SIZE;
+    if (bytes_read != CHUNK_SIZE && bytes_read != modulo)
+        err_n_die("for args->chunk_id: %d, put_chunk pread bytes_read: %d, CHUNK_SIZE: %d\n, modulo: %d\n", 
+            args->chunk_id, bytes_read, CHUNK_SIZE, modulo);
+
+    file_buf[bytes_read] = '\0';
+
+    uint32_t len_chunkRequestWrite = chunk__get_packed_size(chunk_list_global->chunks[args->chunk_id]);
+    uint32_t payload_size = sizeof(uint8_t) + sizeof(uint32_t) + len_chunkRequestWrite
+     + sizeof(uint32_t) + bytes_read;
+    payload_size = htonl(payload_size);
+    op_type = 'w';
+
+    uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequestWrite * sizeof(uint8_t));
+    chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
+
+    for (int i = 0; i < args->n_replicas; i++)
+        if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
+        {
+            print_logs(CLI_DEF_LVL, "i:%d\n", i);
+            break;
+        }
+
+    if (ret < 0)
+        err_n_die("each replica is dead");
+
+    /*
+        payload_size - 4 bytes
+        operation type - 1 byte
+        proto_buf length - 4 bytes
+        proto_buf - (proto_buf length) bytes
+        chunk content length - 4 bytes
+        chunk content - (chunk content length) bytes
+    */
+
+    bulk_write(replicafd, &payload_size, sizeof(payload_size));
+    print_logs(CLI_DEF_LVL, "to sie niby udalo\n");
+
+    write(replicafd, &op_type, 1);
+    
+    write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf);
+    print_logs(CLI_DEF_LVL, "to sie nie uda\n");
+
+    write_len_and_data(replicafd, bytes_read, file_buf);
+
+    free(file_buf);
+    free(proto_buf);
+
+    close(replicafd);
+}
+
+void put_chunk_commit(void *voidPtr)
 {
     // sleep(1);
     int k;
@@ -198,7 +275,6 @@ void put_chunk(void *voidPtr)
 
     close(replicafd);
 }
-
 
 void *thread_work(void *data)
 {
@@ -394,6 +470,73 @@ void do_write(char *path)
     free(argsThread);
 }
 
+void do_write_commit(char *path)
+{
+    int err, filefd, serverfd;
+    int bytes_read;
+
+    print_logs(CLI_DEF_LVL, "Opening file: %s\n", path);
+
+    if ((filefd = open(path, O_RDONLY)) < 0)
+        err_n_die("filefd error");
+
+    debug_file_size = file_size(filefd);
+
+    FileRequestWrite fileRequestWrite = FILE_REQUEST_WRITE__INIT;
+    fileRequestWrite.path = path;
+    fileRequestWrite.size = file_size(filefd);
+
+    /* Packing protbuf object and 'w' into the buffer */
+    uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + 1;
+    uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
+    buffer[0] = 'w';
+    file_request_write__pack(&fileRequestWrite, buffer + 1);
+
+    setup_connection(&serverfd, master_ip, master_port);
+        
+    write_len_and_data(serverfd, len_fileRequestWrite, buffer);
+
+    free(buffer);
+
+    uint32_t payload;
+    read_payload_and_data(serverfd, &buffer, &payload);
+
+    ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
+    if (!chunk_list)
+        err_n_die("chunk_list is null");
+    else
+        print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
+
+    close(serverfd);
+
+    if (!chunk_list->success)
+        err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
+    chunk_list_global = chunk_list;
+
+
+#ifdef DEBUG
+    debug_log(debugfd, "chunk_list->n_chunks: %d\n", chunk_list->n_chunks);
+    for (int i = 0; i < chunk_list->n_chunks; i++)
+    {
+        debug_log(debugfd, "chunk_list->chunks[i]->n_replicas: %ld\n" ,chunk_list->chunks[i]->n_replicas);
+        for (int j = 0; j < chunk_list->chunks[i]->n_replicas; j++)
+        {
+            debug_log(debugfd, "chunk_list->chunks[i]->replicas[j]->ip: %s\n", chunk_list->chunks[i]->replicas[j]->ip);
+            debug_log(debugfd, "chunk_list->chunks[i]->replicas[j]->port: %d\n", chunk_list->chunks[i]->replicas[j]->port);
+        }
+    }
+#endif
+
+    argsThread_t *argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * chunk_list->n_chunks);
+    
+    thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
+                        -1, argsThread, true, false, put_chunk_commit};
+
+    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd);
+
+    free(argsThread);
+}
+
 int main(int argc, char **argv)
 {
     char operation[10]; //TODO refactor
@@ -406,21 +549,21 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef RELEASE
-    if (argc != 5)
-        err_n_die("Error: Invalid parameters. Please provide the Master IP, Master port, operation type and file path.");
+    if (argc != 6)
+        err_n_die("Error: Invalid parameters. Please provide the Master IP, Master port, operation typefile path.");
     strcpy(master_ip, argv[1]);
     master_port = atoi(argv[2]);
     strcpy(operation, argv[3]);
     strcpy(path, argv[4]);
 #else
-    if (argc == 5) // ./server master_ip master_port
+    if (argc == 5) // ./client master_ip master_port op file type
     {
         strcpy(master_ip, argv[1]);
         master_port = atoi(argv[2]);
         strcpy(operation, argv[3]);
         strcpy(path, argv[4]);
     }
-    else if (argc == 3) // ./server master_port
+    else if (argc == 3) // ./client operation file type
     {
         strcpy(operation, argv[1]);
         strcpy(path, argv[2]);
@@ -429,17 +572,15 @@ int main(int argc, char **argv)
         err_n_die("usage: parameters error");
 #endif 
 
+    signal(SIGPIPE, SIG_IGN);
+
     if (strcmp(operation, "read") == 0)
         do_read(path);
     else if (strcmp(operation, "write") == 0)
         do_write(path);
+    else if(strcmp(operation, "write-commit")==0)
+        do_write_commit(path);
     else
         err_n_die("usage: wrong client request");
 
-    // if (strcmp(argv[1], "read") == 0)
-    //     do_read(argv[2]);
-    // else if (strcmp(argv[1], "write") == 0)
-    //     do_write(argv[2]);
-    // else
-    //     err_n_die("usage: wrong client request");
 }
