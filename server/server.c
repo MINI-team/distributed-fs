@@ -14,6 +14,9 @@
 // int replica_robin_index = 0;
 // int total_alive_replicas = 0;
 
+int master_port = 9001;
+char master_ip[IP_LENGTH] = "127.0.0.1";
+
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
@@ -404,7 +407,7 @@ void handle_client(int epoll_fd, event_data_t *event_data, replicas_data_t *repl
         err_n_die("undefined");
 }
 
-int main()
+int main(int argc, char **argv)
 {   
     srand(time(NULL));
     GHashTable          *hash_table = g_hash_table_new(g_str_hash, g_str_equal);
@@ -416,13 +419,31 @@ int main()
     replicas_data_t replicas_data = {0, 0, 0, all_replicas};
 
     // initialize_demo_replicas(all_replicas);
-    server_setup(&server_socket, &epoll_fd, &event);
-
     // print_logs(1, "test %d", 1);
+
+#ifdef RELEASE
+    if (argc != 3)
+        err_n_die("Error: Invalid parameters. Please provide the Master IP, Master port.");
+    strcpy(master_ip, argv[1]);
+    master_port = atoi(argv[2]);
+#else
+    if (argc == 3) // ./server master_ip master_port
+    {
+        strcpy(master_ip, argv[1]);
+        master_port = atoi(argv[2]);
+    }
+    else if (argc == 2) // ./server master_port
+    {
+        master_port = atoi(argv[1]);
+    }
+#endif 
+
+    server_setup(&server_socket, &epoll_fd, &event);
 
     while (running) 
     {
-        print_logs(MAS_DEF_LVL, "\n Server polling for events \n");
+        print_logs(0, "\n Master IP: %s, port: %d polling for events \n",
+                master_ip, master_port);
         
         // MAX_EVENTS: 1000, przyjdzie na raz 30 
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); //connect
@@ -439,7 +460,6 @@ int main()
             }
             else
             {
-                
                 if (events[i].events & EPOLLIN)
                 {
                     print_logs(MAS_DEF_LVL, "client event EPOLLIN triggered\n");
@@ -461,6 +481,7 @@ int main()
     close(server_socket);
 }
 
+// TODO common this, add clean exit
 void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
 {
     struct sockaddr_in servaddr;
@@ -474,8 +495,12 @@ void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event)
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(MASTER_SERVER_PORT);
+    // servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (inet_pton(AF_INET, master_ip, &servaddr.sin_addr) <= 0)
+        err_n_die("inet_pton error - invalid address");
+
+    servaddr.sin_port = htons(master_port);
 
     if (bind(*server_socket, (SA *)&servaddr, sizeof(servaddr)) < 0)
         err_n_die("bind error");
