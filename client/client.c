@@ -4,6 +4,9 @@
 #include "client.h"
 #include "pthread.h"
 
+int master_port = 9001;
+char master_ip[IP_LENGTH] = "127.0.0.1";
+
 FILE * debugfd;
 char* received_chunk_path = "test";
 int64_t debug_file_size;
@@ -296,7 +299,7 @@ void do_read(char *path)
     buffer[0] = 'r';
     file_request_read__pack(&fileRequestRead, buffer + 1);
 
-    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    setup_connection(&serverfd, master_ip, master_port);
 
     write_len_and_data(serverfd, len_fileRequestRead, buffer);
     free(buffer);
@@ -346,7 +349,7 @@ void do_write(char *path)
     buffer[0] = 'w';
     file_request_write__pack(&fileRequestWrite, buffer + 1);
 
-    setup_connection(&serverfd, MASTER_SERVER_IP, MASTER_SERVER_PORT);
+    setup_connection(&serverfd, master_ip, master_port);
         
     write_len_and_data(serverfd, len_fileRequestWrite, buffer);
 
@@ -393,18 +396,50 @@ void do_write(char *path)
 
 int main(int argc, char **argv)
 {
+    char operation[10]; //TODO refactor
+    char path[256];
+
 #ifdef DEBUG
     debugfd = fopen(CLIENT_DEBUG_PATH, "w");
     if (!debugfd)
         err_n_die("debugfd open error");
 #endif
-    if (argc != 3)
-        err_n_die("usage: parameters error");
 
-    if (strcmp(argv[1], "read") == 0)
-        do_read(argv[2]);
-    else if (strcmp(argv[1], "write") == 0)
-        do_write(argv[2]);
+#ifdef RELEASE
+    if (argc != 5)
+        err_n_die("Error: Invalid parameters. Please provide the Master IP, Master port, operation type and file path.");
+    strcpy(master_ip, argv[1]);
+    master_port = atoi(argv[2]);
+    strcpy(operation, argv[3]);
+    strcpy(path, argv[4]);
+#else
+    if (argc == 5) // ./server master_ip master_port
+    {
+        strcpy(master_ip, argv[1]);
+        master_port = atoi(argv[2]);
+        strcpy(operation, argv[3]);
+        strcpy(path, argv[4]);
+    }
+    else if (argc == 3) // ./server master_port
+    {
+        strcpy(operation, argv[1]);
+        strcpy(path, argv[2]);
+    }
+    else
+        err_n_die("usage: parameters error");
+#endif 
+
+    if (strcmp(operation, "read") == 0)
+        do_read(path);
+    else if (strcmp(operation, "write") == 0)
+        do_write(path);
     else
         err_n_die("usage: wrong client request");
+
+    // if (strcmp(argv[1], "read") == 0)
+    //     do_read(argv[2]);
+    // else if (strcmp(argv[1], "write") == 0)
+    //     do_write(argv[2]);
+    // else
+    //     err_n_die("usage: wrong client request");
 }

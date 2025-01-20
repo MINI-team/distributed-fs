@@ -31,6 +31,8 @@
 
 // #define DOCKER
 
+#define RELEASE
+
 #ifdef DOCKER
 #define MASTER_SERVER_IP "server_container"
 #define REPLICA_SERVER_IP_0 "replica_container_0"
