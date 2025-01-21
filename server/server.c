@@ -100,7 +100,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     free(buffer);
 }
 
-void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table)
+void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table, bool committed)
 {
     int replicas_count = replicas_data->replicas_count;
     int total_alive_replicas = replicas_data->total_alive_replicas;
@@ -119,7 +119,8 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
 
     ChunkList *chunk_list = (ChunkList *)malloc(sizeof(ChunkList));
     chunk_list__init(chunk_list);
-    chunk_list->success = 1;
+    chunk_list->success = true;
+    chunk_list->committed = committed;
     chunk_list->n_chunks = chunks_number;
     chunk_list->chunks = (Chunk **)malloc(chunks_number * sizeof(Chunk *));
 
@@ -174,11 +175,11 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     int *replica_robin_index = &(replicas_data->replica_robin_index);
     replica_info_t **all_replicas = replicas_data->all_replicas;
 
-    char request_type = event_data->peer_data->buffer[0];
+    char op_type = event_data->peer_data->buffer[0];
 
-    print_logs(MAS_DEF_LVL, "request type: %c\n", request_type);
+    print_logs(MAS_DEF_LVL, "request type: %c\n", op_type);
 
-    if (request_type == 'w')
+    if (op_type == 'w' || op_type == 'x')
     {
         print_logs(MAS_DEF_LVL, "write request detected \n");
         print_logs(MAS_DEF_LVL, "event_data->peer_data->payload_size - 1: %d\n", event_data->peer_data->payload_size - 1);
@@ -201,7 +202,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             return;
         }
 
-        add_file(fileRequestWrite->path, fileRequestWrite->size, replicas_data, hash_table);
+        add_file(fileRequestWrite->path, fileRequestWrite->size, replicas_data, hash_table, op_type == 'w' ? true : false);
 
         chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
@@ -216,16 +217,16 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             err_n_die("should never happen\n");
         }
     }
-    else if (request_type == 'r')
+    else if (op_type == 'r')
     {
         print_logs(MAS_DEF_LVL, "read request detected \n"); 
         FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
         print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", FileRequestRead->path);
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
         
-        if (chunk_list)
+        if (chunk_list || !chunk_list->committed)
         {
-            printf("it was null\n");
+            print_logs(0, "The file was null or uncommitted\n");
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
@@ -234,7 +235,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             print_logs(MAS_DEF_LVL, "not found \n");
         }
     }
-    else if(request_type == 'n')
+    else if(op_type == 'n')
     {
         print_logs(MAS_DEF_LVL, "new replica request detected \n");
         NewReplica *replica = new_replica__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
@@ -257,7 +258,12 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             {
                 print_logs(3, "Replica IP: %s, port: %d will be registered back.\n", 
                         all_replicas[i]->ip, all_replicas[i]->port);
-                break;
+                
+                all_replicas[i]->isAlive = true;
+                (*total_alive_replicas)++;
+                print_logs(3, "Replicas count: %d\n", *replicas_count);
+                print_logs(3, "Total alive replicas: %d\n", *total_alive_replicas);
+                return;
             }
         }
 
@@ -279,9 +285,39 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         // TODO free NewReplica probably !!!
         new_replica__free_unpacked(replica, NULL);
     }
-    else if (request_type == 'c')
+    else if (op_type == 'c')
     {
         print_logs(0, "=======================\nMaster received commit request\n=======================\n\n\n");
+
+        CommitChunkList *commit_chunk_list = commit_chunk_list__unpack(
+            NULL, 
+            event_data->peer_data->payload_size - 1, 
+            event_data->peer_data->buffer + 1
+        );
+
+        if (!commit_chunk_list)
+            err_n_die("commit_chunk_list is NULL");
+
+        if(commit_chunk_list->success)
+        {
+            // 
+            ChunkList* chunk_list = g_hash_table_lookup(hash_table, commit_chunk_list->path);
+            chunk_list->committed = true;
+            return;
+        }
+
+        for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+        {
+            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            {
+                for (int y = 0; y < *replicas_count; y++)
+                {
+                    if (are_replicas_same(all_replicas[y], commit_chunk_list->chunks[i]->replicas[j]))
+                        all_replicas[y]->isAlive = false;
+                }
+            }
+        }
+
     }
     else
     {

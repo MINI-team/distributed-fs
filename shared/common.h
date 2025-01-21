@@ -17,6 +17,7 @@
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <stdbool.h>
+#include "dfs.pb-c.h"
 
 // #define SERVER_PORT 18000
 
@@ -190,4 +191,6 @@ int64_t file_size(int filefd);
 const char *peer_type_to_string(peer_type_t peer_type);
 
 void print_logs(int level, const char *fmt, ...);
+
+bool are_replicas_same(replica_info_t *r1, Replica *r2);
 #endif

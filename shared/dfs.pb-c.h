@@ -85,12 +85,13 @@ struct  ChunkList
 {
   ProtobufCMessage base;
   protobuf_c_boolean success;
+  protobuf_c_boolean committed;
   size_t n_chunks;
   Chunk **chunks;
 };
 #define CHUNK_LIST__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&chunk_list__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0, 0,NULL }
 
 
 struct  ChunkRequest

@@ -777,7 +777,7 @@ const ProtobufCMessageDescriptor chunk__descriptor =
   (ProtobufCMessageInit) chunk__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor chunk_list__field_descriptors[2] =
+static const ProtobufCFieldDescriptor chunk_list__field_descriptors[3] =
 {
   {
     "success",
@@ -792,8 +792,20 @@ static const ProtobufCFieldDescriptor chunk_list__field_descriptors[2] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "chunks",
+    "committed",
     2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(ChunkList, committed),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "chunks",
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(ChunkList, n_chunks),
@@ -805,13 +817,14 @@ static const ProtobufCFieldDescriptor chunk_list__field_descriptors[2] =
   },
 };
 static const unsigned chunk_list__field_indices_by_name[] = {
-  1,   /* field[1] = chunks */
+  2,   /* field[2] = chunks */
+  1,   /* field[1] = committed */
   0,   /* field[0] = success */
 };
 static const ProtobufCIntRange chunk_list__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor chunk_list__descriptor =
 {
@@ -821,7 +834,7 @@ const ProtobufCMessageDescriptor chunk_list__descriptor =
   "ChunkList",
   "",
   sizeof(ChunkList),
-  2,
+  3,
   chunk_list__field_descriptors,
   chunk_list__field_indices_by_name,
   1,  chunk_list__number_ranges,

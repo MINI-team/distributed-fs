@@ -600,8 +600,8 @@ void do_write_commit(char *path)
     /* Packing protbuf object and 'w' into the buffer */
     uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + sizeof(uint8_t);
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
-    buffer[0] = 'w';
-    file_request_write__pack(&fileRequestWrite, buffer + 1);
+    buffer[0] = 'x';
+    file_request_write__pack(&fileRequestWrite, buffer + sizeof(uint8_t));
 
     setup_connection(&serverfd, master_ip, master_port);
         
