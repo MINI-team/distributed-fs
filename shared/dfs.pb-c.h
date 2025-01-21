@@ -24,6 +24,7 @@ typedef struct ChunkRequest ChunkRequest;
 typedef struct WriteChunk WriteChunk;
 typedef struct FileResponse FileResponse;
 typedef struct CommitChunk CommitChunk;
+typedef struct CommitChunkList CommitChunkList;
 typedef struct NewReplica NewReplica;
 typedef struct ChunkCommitReport ChunkCommitReport;
 
@@ -143,6 +144,19 @@ struct  CommitChunk
 #define COMMIT_CHUNK__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&commit_chunk__descriptor) \
     , 0, 0, 0,NULL, 0,NULL }
+
+
+struct  CommitChunkList
+{
+  ProtobufCMessage base;
+  protobuf_c_boolean success;
+  char *path;
+  size_t n_chunks;
+  Chunk **chunks;
+};
+#define COMMIT_CHUNK_LIST__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&commit_chunk_list__descriptor) \
+    , 0, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 struct  NewReplica
@@ -339,6 +353,25 @@ CommitChunk *
 void   commit_chunk__free_unpacked
                      (CommitChunk *message,
                       ProtobufCAllocator *allocator);
+/* CommitChunkList methods */
+void   commit_chunk_list__init
+                     (CommitChunkList         *message);
+size_t commit_chunk_list__get_packed_size
+                     (const CommitChunkList   *message);
+size_t commit_chunk_list__pack
+                     (const CommitChunkList   *message,
+                      uint8_t             *out);
+size_t commit_chunk_list__pack_to_buffer
+                     (const CommitChunkList   *message,
+                      ProtobufCBuffer     *buffer);
+CommitChunkList *
+       commit_chunk_list__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   commit_chunk_list__free_unpacked
+                     (CommitChunkList *message,
+                      ProtobufCAllocator *allocator);
 /* NewReplica methods */
 void   new_replica__init
                      (NewReplica         *message);
@@ -406,6 +439,9 @@ typedef void (*FileResponse_Closure)
 typedef void (*CommitChunk_Closure)
                  (const CommitChunk *message,
                   void *closure_data);
+typedef void (*CommitChunkList_Closure)
+                 (const CommitChunkList *message,
+                  void *closure_data);
 typedef void (*NewReplica_Closure)
                  (const NewReplica *message,
                   void *closure_data);
@@ -427,6 +463,7 @@ extern const ProtobufCMessageDescriptor chunk_request__descriptor;
 extern const ProtobufCMessageDescriptor write_chunk__descriptor;
 extern const ProtobufCMessageDescriptor file_response__descriptor;
 extern const ProtobufCMessageDescriptor commit_chunk__descriptor;
+extern const ProtobufCMessageDescriptor commit_chunk_list__descriptor;
 extern const ProtobufCMessageDescriptor new_replica__descriptor;
 extern const ProtobufCMessageDescriptor chunk_commit_report__descriptor;
 

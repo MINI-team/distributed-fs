@@ -20,7 +20,7 @@ char master_ip[IP_LENGTH] = "127.0.0.1";
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
-    print_logs(MAS_DEF_LVL, "New client connected\n");
+    print_logs(0, "\n\nNew client connected\n\n\n");
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
         // print_logs(MAS_DEF_LVL, "Server couldnt accept client\n");
@@ -278,6 +278,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
         // TODO free NewReplica probably !!!
         new_replica__free_unpacked(replica, NULL);
+    }
+    else if (request_type == 'c')
+    {
+        print_logs(0, "=======================\nMaster received commit request\n=======================\n\n\n");
     }
     else
     {

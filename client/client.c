@@ -384,7 +384,8 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
     
     for (int i = 0; i < chunk_list->n_chunks; i++)
     {
-        argsThread[i].chunk_id = i;
+        // argsThread[i].chunk_id = i; // TODO mega wazne !!!!!!!!!!!!!!!!!!!!!!!   
+        argsThread[i].chunk_id = chunk_list->chunks[i]->chunk_id; // TODO sprawdzic czy dobrze to zrobilem
         argsThread[i].path = path;
         argsThread[i].n_replicas = chunk_list->chunks[i]->n_replicas;
         argsThread[i].replicas = chunk_list->chunks[i]->replicas;
@@ -434,7 +435,7 @@ void do_read(char *path)
     fileRequestRead.path = path;
 
     /* Packing protbuf object and 'r' into the buffer */
-    uint32_t len_fileRequestRead = file_request_read__get_packed_size(&fileRequestRead) + 1;
+    uint32_t len_fileRequestRead = file_request_read__get_packed_size(&fileRequestRead) + sizeof(uint8_t);
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestRead * sizeof(uint8_t));
     buffer[0] = 'r';
     file_request_read__pack(&fileRequestRead, buffer + 1);
@@ -484,10 +485,10 @@ void do_write(char *path)
     fileRequestWrite.size = file_size(filefd);
 
     /* Packing protbuf object and 'w' into the buffer */
-    uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + 1;
+    uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + sizeof(uint8_t);
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     buffer[0] = 'w';
-    file_request_write__pack(&fileRequestWrite, buffer + 1);
+    file_request_write__pack(&fileRequestWrite, buffer + sizeof(uint8_t));
 
     setup_connection(&serverfd, master_ip, master_port);
         
@@ -534,6 +535,52 @@ void do_write(char *path)
     free(argsThread);
 }
 
+CommitChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommited_chunks)
+{
+    CommitChunkList *commit_chunk_list = (CommitChunkList *)malloc(sizeof(CommitChunkList));
+    commit_chunk_list__init(commit_chunk_list);
+    int uncommited_chunks_cnt = 0;
+
+    for (int i = 0; i < n_chunks; i++)
+        if (uncommited_chunks[i])
+            uncommited_chunks_cnt++;
+
+    commit_chunk_list->path = (char *)malloc(strlen(path) * sizeof(char));
+    strcpy(commit_chunk_list->path, path);
+    commit_chunk_list->n_chunks = uncommited_chunks_cnt; // may be 0, then it's success
+
+    if (uncommited_chunks_cnt == 0)
+    {
+        commit_chunk_list->success = true;
+        commit_chunk_list->chunks = NULL;
+        return commit_chunk_list;
+    }
+
+    commit_chunk_list->success = false;
+    commit_chunk_list->chunks = (Chunk **)malloc(uncommited_chunks_cnt * sizeof(Chunk *));
+    int it = 0;
+
+    for (int i = 0; i < n_chunks; i++)
+        if (uncommited_chunks[i])
+            commit_chunk_list->chunks[it++] = uncommited_chunks[i];
+    
+    return commit_chunk_list;
+}
+
+void send_uncommitted_chunks(CommitChunkList *commit_chunk_list, int serverfd)
+{
+    uint32_t len_CommitChunkList = commit_chunk_list__get_packed_size(commit_chunk_list) + sizeof(uint8_t);
+    uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
+    buffer[0] = 'c';
+    commit_chunk_list__pack(commit_chunk_list, buffer + sizeof(uint8_t));
+
+    write_len_and_data(serverfd, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size
+    
+    print_logs(0, "sent %d payload size to master\n", len_CommitChunkList);
+    
+    free(buffer);
+}
+
 void do_write_commit(char *path)
 {
     int err, filefd, serverfd;
@@ -551,7 +598,7 @@ void do_write_commit(char *path)
     fileRequestWrite.size = file_size(filefd);
 
     /* Packing protbuf object and 'w' into the buffer */
-    uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + 1;
+    uint32_t len_fileRequestWrite = file_request_write__get_packed_size(&fileRequestWrite) + sizeof(uint8_t);
     uint8_t *buffer = (uint8_t *)malloc(len_fileRequestWrite * sizeof(uint8_t));
     buffer[0] = 'w';
     file_request_write__pack(&fileRequestWrite, buffer + 1);
@@ -619,8 +666,22 @@ void do_write_commit(char *path)
             print_logs(1, "\nChunk %d fully commited\n", i);
         }
     }
-
     free(argsThread);
+
+    CommitChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
+
+    setup_connection(&serverfd, master_ip, master_port);
+    
+    send_uncommitted_chunks(commit_chunk_list, serverfd);
+
+    // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+    //     free(commit_chunk_list->chunks[i]);
+    free(commit_chunk_list);
+
+    for (int i = 0; i < chunk_list->n_chunks; i++)
+        free(uncommited_chunks[i]);
+    free(uncommited_chunks);
+
 }
 
 int main(int argc, char **argv)

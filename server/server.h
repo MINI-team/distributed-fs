@@ -3,7 +3,7 @@
 
 #include "common.h"
 
-#define SINGLE_CLIENT_BUFFER_SIZE 2000
+#define SINGLE_CLIENT_BUFFER_SIZE 2000000 // TODO nieoptymalne
 
 // typedef struct {
 //     int client_socket;

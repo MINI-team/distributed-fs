@@ -53,6 +53,12 @@ message CommitChunk {
     repeated Replica replicas_fail = 4;
 }
 
+message CommitChunkList {
+    bool success = 1;
+    string path = 2;
+    repeated Chunk chunks = 3;
+}
+
 message NewReplica {
     string ip = 1;
     int32 port = 2;
