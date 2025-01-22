@@ -234,9 +234,9 @@ int main(int argc, char **argv)
 
             for (int i = 0; i < chunk->n_replicas; i++)
             {
-                printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
+                printf("Name: %s IP: %s Port: %d\n",
                        chunk->replicas[i]->name, chunk->replicas[i]->ip,
-                       chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+                       chunk->replicas[i]->port);
             }
 
             n = bulk_read(connfd, &buf_len, sizeof(buf_len));

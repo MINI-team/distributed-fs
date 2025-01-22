@@ -221,7 +221,6 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
             strcpy(replica->ip, replicas_from_master[i]->ip);
             // replica->ip = replicas_from_master[i]->ip; TODO inspect if this is really wrong
             replica->port = replicas_from_master[i]->port;
-            replica->is_primary = replicas_from_master[i]->is_primary; // TODO REMOVE THIS TROLLING
 
             j++;
         }

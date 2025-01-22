@@ -636,17 +636,17 @@ const ProtobufCMessageDescriptor file_request_write__descriptor =
   (ProtobufCMessageInit) file_request_write__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor replica__field_descriptors[4] =
+static const ProtobufCFieldDescriptor replica__field_descriptors[3] =
 {
   {
-    "name",
+    "id",
     1,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
+    PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Replica, name),
+    offsetof(Replica, id),
     NULL,
-    &protobuf_c_empty_string,
+    NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
@@ -674,29 +674,16 @@ static const ProtobufCFieldDescriptor replica__field_descriptors[4] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "is_primary",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Replica, is_primary),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
 static const unsigned replica__field_indices_by_name[] = {
+  0,   /* field[0] = id */
   1,   /* field[1] = ip */
-  3,   /* field[3] = is_primary */
-  0,   /* field[0] = name */
   2,   /* field[2] = port */
 };
 static const ProtobufCIntRange replica__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 3 }
 };
 const ProtobufCMessageDescriptor replica__descriptor =
 {
@@ -706,7 +693,7 @@ const ProtobufCMessageDescriptor replica__descriptor =
   "Replica",
   "",
   sizeof(Replica),
-  4,
+  3,
   replica__field_descriptors,
   replica__field_indices_by_name,
   1,  replica__number_ranges,

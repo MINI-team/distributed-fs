@@ -158,13 +158,13 @@ struct event_data_t {
     };
 };
 
-typedef struct {
-    int id;
-    char *ip;
-    int32_t port;
-    int stored_chunks; // not needed?
-    bool isAlive;
-} replica_info_t;
+// typedef struct {
+//     int id;
+//     char *ip;
+//     int32_t port;
+//     int stored_chunks; // not needed?
+//     bool isAlive;
+// } replica_info_t;
 
 void err_n_die(const char *fmt, ...);
 char *bin2hex(const unsigned char *input, size_t len);
@@ -192,5 +192,5 @@ const char *peer_type_to_string(peer_type_t peer_type);
 
 void print_logs(int level, const char *fmt, ...);
 
-bool are_replicas_same(replica_info_t *r1, Replica *r2);
+bool are_replicas_same(Replica *r1, Replica *r2);
 #endif

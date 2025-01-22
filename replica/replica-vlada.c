@@ -542,9 +542,9 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         for (int i = 0; i < chunk->n_replicas; i++)
         {
-            printf("Name: %s IP: %s Port: %d Is_primary: %d\n",
+            printf("Name: %s IP: %s Port: %d\n",
                    chunk->replicas[i]->name, chunk->replicas[i]->ip,
-                   chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+                   chunk->replicas[i]->port);
         }
 
         client_type_t client_type =  op_type == 'w' ? CLIENT : REPLICA_PRIMO;

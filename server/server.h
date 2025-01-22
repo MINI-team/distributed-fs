@@ -35,13 +35,13 @@ typedef struct {
     int replicas_count;
     int replica_robin_index;
     int total_alive_replicas;
-    replica_info_t **all_replicas;
+    Replica **all_replicas;
+    bool *is_alive;
 } replicas_data_t;
 
 // Function prototypes
 
 /* Server setup */
-void initialize_demo_replicas(replica_info_t **all_replicas);
 void server_setup(int *server_socket, int *epoll_fd, struct epoll_event *event);
 
 /* New clients */
@@ -51,7 +51,5 @@ void handle_new_connection(int epoll_fd, int server_socket);
 void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table, bool committed);
 void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table);
 void handle_client(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table);
-
-bool are_replicas_same(replica_info_t *r1,  Replica *r2);
 
 #endif

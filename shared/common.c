@@ -379,7 +379,7 @@ void print_logs(int level, const char *fmt, ...)
     va_end(ap);
 }
 
-bool are_replicas_same(replica_info_t *r1,  Replica *r2)
+bool are_replicas_same(Replica *r1,  Replica *r2)
 {
     return strcmp(r1->ip, r2->ip) == 0 && r1->port == r2->port;
 }

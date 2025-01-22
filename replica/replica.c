@@ -759,9 +759,9 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         for (int i = 0; i < chunk->n_replicas; i++)
         {
-            print_logs(REP_DEF_LVL, "Name: %s IP: %s Port: %d Is_primary: %d\n",
-                   chunk->replicas[i]->name, chunk->replicas[i]->ip,
-                   chunk->replicas[i]->port, chunk->replicas[i]->is_primary);
+            print_logs(REP_DEF_LVL, "Id: %d IP: %s Port: %d \n",
+                   chunk->replicas[i]->id, chunk->replicas[i]->ip,
+                   chunk->replicas[i]->port);
         }
 
         peer_type_t peer_type = op_type == 'w' ? CLIENT_WRITE : REPLICA_PRIMO;

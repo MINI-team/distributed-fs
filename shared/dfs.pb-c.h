@@ -58,14 +58,13 @@ struct  FileRequestWrite
 struct  Replica
 {
   ProtobufCMessage base;
-  char *name;
+  int32_t id;
   char *ip;
   int32_t port;
-  protobuf_c_boolean is_primary;
 };
 #define REPLICA__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&replica__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  Chunk

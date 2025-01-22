@@ -105,7 +105,8 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
     int replicas_count = replicas_data->replicas_count;
     int total_alive_replicas = replicas_data->total_alive_replicas;
     int *replica_robin_index = &(replicas_data->replica_robin_index);
-    replica_info_t **all_replicas = replicas_data->all_replicas;
+    Replica **all_replicas = replicas_data->all_replicas;
+    bool *is_alive = replicas_data->is_alive;
 
     if (total_alive_replicas < REPLICATION_FACTOR)
     {
@@ -137,21 +138,14 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
 
         // Replica *replicas[REPLICATION_FACTOR];
         for (int j = 0; j < REPLICATION_FACTOR; j++)
-        {
-            Replica *replica = (Replica *)malloc(sizeof(Replica));
-            replica__init(replica);
-            
-            while (!all_replicas[rand_ind]->isAlive)
+        {     
+            while (!is_alive[rand_ind])
             {
                 printf("Replica %d is dead, incrementing rand_ind\n", rand_ind);
                 rand_ind = (rand_ind + 1) % replicas_count;
             }
-
-            replica->ip = (char *)malloc(IP_LENGTH * sizeof(char));
-            strcpy(replica->ip, all_replicas[rand_ind]->ip);
-            replica->port = all_replicas[rand_ind]->port;
-            replica->is_primary = (j == 0); // TODO do we need this?
-
+            
+            Replica *replica = all_replicas[rand_ind];
             chunk->replicas[j] = replica;
             print_logs(MAS_DEF_LVL, "Chunkowi %d przydzielono replike nr %d, IP: %s, port: %d\n",
                 i, rand_ind, all_replicas[rand_ind]->ip, all_replicas[rand_ind]->port);
@@ -169,11 +163,12 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
 void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table)
 {
     // int *replicas_count = &(replicas_data->replicas_count);
-    // replica_info_t **all_replicas = replicas_data->all_replicas;
+    // Replica **all_replicas = replicas_data->all_replicas;
     int *replicas_count = &(replicas_data->replicas_count);
     int *total_alive_replicas = &(replicas_data->total_alive_replicas);
     int *replica_robin_index = &(replicas_data->replica_robin_index);
-    replica_info_t **all_replicas = replicas_data->all_replicas;
+    Replica **all_replicas = replicas_data->all_replicas;
+    bool *is_alive = replicas_data->is_alive;
 
     char op_type = event_data->peer_data->buffer[0];
 
@@ -224,7 +219,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", FileRequestRead->path);
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
         
-        if (chunk_list || !chunk_list->committed)
+        if (!chunk_list || !chunk_list->committed)
         {
             print_logs(0, "The file was null or uncommitted\n");
             setup_outbound(epoll_fd, event_data, chunk_list);
@@ -242,8 +237,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
         for (int i = 0; i < *replicas_count; i++)
         {
-
-            if (all_replicas[i]->isAlive && all_replicas[i]->port == replica->port 
+            if (is_alive[i] && all_replicas[i]->port == replica->port 
                     && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
                 print_logs(3, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
@@ -253,13 +247,13 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 print_logs(3, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
                 return;
             }
-            if (!all_replicas[i]->isAlive && all_replicas[i]->port == replica->port
+            if (!is_alive[i] && all_replicas[i]->port == replica->port
                 && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
                 print_logs(3, "Replica IP: %s, port: %d will be registered back.\n", 
                         all_replicas[i]->ip, all_replicas[i]->port);
                 
-                all_replicas[i]->isAlive = true;
+                is_alive[i] = true;
                 (*total_alive_replicas)++;
                 print_logs(3, "Replicas count: %d\n", *replicas_count);
                 print_logs(3, "Total alive replicas: %d\n", *total_alive_replicas);
@@ -268,9 +262,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         }
 
         // calloc()
-        all_replicas[*replicas_count] = (replica_info_t *)malloc(sizeof(replica_info_t));
+        all_replicas[*replicas_count] = (Replica *)malloc(sizeof(Replica));
+        replica__init(all_replicas[*replicas_count]);
         all_replicas[*replicas_count]->ip = (char *)malloc(IP_LENGTH * sizeof(char)); // Allocating memory for IP
-        all_replicas[*replicas_count]->isAlive = true;
+        is_alive[*replicas_count] = true;
         strcpy(all_replicas[*replicas_count]->ip, replica->ip);
         all_replicas[*replicas_count]->port = replica->port;
         
@@ -313,11 +308,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 for (int y = 0; y < *replicas_count; y++)
                 {
                     if (are_replicas_same(all_replicas[y], commit_chunk_list->chunks[i]->replicas[j]))
-                        all_replicas[y]->isAlive = false;
+                        is_alive[y] = false;
                 }
             }
         }
-
     }
     else
     {
@@ -454,11 +448,11 @@ int main(int argc, char **argv)
     int                 server_socket;
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
-    replica_info_t      *all_replicas[1000]; // these are all replicas master knows
+    Replica             *all_replicas[1000]; // these are all replicas master knows
+    bool                is_alive[1000];
 
-    replicas_data_t replicas_data = {0, 0, 0, all_replicas};
+    replicas_data_t replicas_data = {0, 0, 0, all_replicas, is_alive};
 
-    // initialize_demo_replicas(all_replicas);
     // print_logs(1, "test %d", 1);
 
 #ifdef RELEASE

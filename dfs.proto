@@ -12,10 +12,9 @@ message FileRequestWrite {
 }
 
 message Replica {
-    string name = 1;
+    int32 id = 1;
     string ip = 2;
     int32 port = 3;
-    bool is_primary = 4;
 }
   
 message Chunk {
