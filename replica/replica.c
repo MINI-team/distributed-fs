@@ -21,20 +21,6 @@ bool current_connections[MAX_CONNECTIONS];
 #define MAX_EVENTS 4096
 #define SINGLE_CLIENT_BUFFER_SIZE CHUNK_SIZE + 2000
 
-int set_fd_blocking(int fd)
-{
-    int flags;
-    // Get current file descriptor flags
-    if ((flags = fcntl(fd, F_GETFL)) < 0)
-        err_n_die("fcntl error");
-    // Clear the O_NONBLOCK flag to make it blocking
-    flags &= ~O_NONBLOCK;
-    // Set the updated flags
-    if (fcntl(fd, F_SETFL, flags) < 0)
-        err_n_die("fcntl error");
-    return 0; // Success
-}
-
 void server_setup(event_data_t **server_event_data, int *server_socket, char *server_ip,
         int server_port, int *epoll_fd)
 {

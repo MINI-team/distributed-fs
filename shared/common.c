@@ -383,3 +383,11 @@ bool are_replicas_same(Replica *r1,  Replica *r2)
 {
     return strcmp(r1->ip, r2->ip) == 0 && r1->port == r2->port;
 }
+
+int set_fd_blocking(int fd)
+{
+    int flags;
+    if ((flags = fcntl(fd, F_GETFL, flags)) < 0)
+        err_n_die("fcntl error");
+    return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+}

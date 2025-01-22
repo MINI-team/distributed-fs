@@ -193,4 +193,7 @@ const char *peer_type_to_string(peer_type_t peer_type);
 void print_logs(int level, const char *fmt, ...);
 
 bool are_replicas_same(Replica *r1, Replica *r2);
+
+
+int set_fd_blocking(int fd);    
 #endif

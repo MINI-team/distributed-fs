@@ -100,6 +100,37 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     free(buffer);
 }
 
+int round_robin(replicas_data_t *replicas_data)
+{
+    int replicas_count = replicas_data->replicas_count;
+    int total_alive_replicas = replicas_data->total_alive_replicas;
+    int *replica_robin_index = &(replicas_data->replica_robin_index);
+    bool *is_alive = replicas_data->is_alive;
+    bool *already_used = replicas_data->already_used;
+    
+    if (total_alive_replicas < REPLICATION_FACTOR)
+    {
+        // TODO disconnect the client
+        print_logs(0, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
+        return -1;
+    }
+
+    int rand_ind = *replica_robin_index;
+
+    while (!is_alive[rand_ind] || already_used[rand_ind])
+    {
+        if (!is_alive[rand_ind])
+            printf("Replica %d is dead, incrementing rand_ind\n", rand_ind);
+        if (already_used[rand_ind])
+            printf("Replica %d is already_used, incrementing rand_ind\n", rand_ind);
+        rand_ind = (rand_ind + 1) % replicas_count;
+    }
+
+    *replica_robin_index = (*replica_robin_index + 1) % replicas_count;
+
+    return rand_ind;
+}
+
 void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTable *hash_table, bool committed)
 {
     int replicas_count = replicas_data->replicas_count;
@@ -169,6 +200,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     int *replica_robin_index = &(replicas_data->replica_robin_index);
     Replica **all_replicas = replicas_data->all_replicas;
     bool *is_alive = replicas_data->is_alive;
+    bool *already_used = replicas_data->already_used;
 
     char op_type = event_data->peer_data->buffer[0];
 
@@ -240,23 +272,23 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             if (is_alive[i] && all_replicas[i]->port == replica->port 
                     && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(3, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
+                print_logs(0, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
                         all_replicas[i]->ip, all_replicas[i]->port);
 
-                print_logs(3, "Replicas count: %d\n", *replicas_count);
-                print_logs(3, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
+                print_logs(0, "Replicas count: %d\n", *replicas_count);
+                print_logs(0, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
                 return;
             }
             if (!is_alive[i] && all_replicas[i]->port == replica->port
                 && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(3, "Replica IP: %s, port: %d will be registered back.\n", 
+                print_logs(0, "Replica IP: %s, port: %d will be registered back.\n", 
                         all_replicas[i]->ip, all_replicas[i]->port);
                 
                 is_alive[i] = true;
                 (*total_alive_replicas)++;
-                print_logs(3, "Replicas count: %d\n", *replicas_count);
-                print_logs(3, "Total alive replicas: %d\n", *total_alive_replicas);
+                print_logs(0, "Replicas count: %d\n", *replicas_count);
+                print_logs(0, "Total alive replicas: %d\n", *total_alive_replicas);
                 return;
             }
         }
@@ -266,6 +298,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         replica__init(all_replicas[*replicas_count]);
         all_replicas[*replicas_count]->ip = (char *)malloc(IP_LENGTH * sizeof(char)); // Allocating memory for IP
         is_alive[*replicas_count] = true;
+        all_replicas[*replicas_count]->id = *replicas_count;
         strcpy(all_replicas[*replicas_count]->ip, replica->ip);
         all_replicas[*replicas_count]->port = replica->port;
         
@@ -293,11 +326,12 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         if (!commit_chunk_list)
             err_n_die("commit_chunk_list is NULL");
 
+         // 
+        ChunkList* chunk_list = g_hash_table_lookup(hash_table, commit_chunk_list->path);
         if(commit_chunk_list->success)
         {
-            // 
-            ChunkList* chunk_list = g_hash_table_lookup(hash_table, commit_chunk_list->path);
             chunk_list->committed = true;
+            commit_chunk_list__free_unpacked(commit_chunk_list, NULL);
             return;
         }
 
@@ -305,13 +339,63 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         {
             for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
             {
-                for (int y = 0; y < *replicas_count; y++)
+                if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] == true)
                 {
-                    if (are_replicas_same(all_replicas[y], commit_chunk_list->chunks[i]->replicas[j]))
-                        is_alive[y] = false;
+                   (*total_alive_replicas)--; 
+                }
+                is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] = false;
+            }
+        }
+
+        int index_stack[REPLICATION_FACTOR];
+        int stack_size = 0;
+
+        for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+        {
+            Chunk *cur_chunk = commit_chunk_list->chunks[i];
+            
+            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            {
+                if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id])
+                {
+                    already_used[commit_chunk_list->chunks[i]->replicas[j]->id] = true;
+                    index_stack[stack_size++] = commit_chunk_list->chunks[i]->replicas[j]->id; // TODO usuwamy to
+                }
+            }
+
+            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            {
+                if (!is_alive[commit_chunk_list->chunks[i]->replicas[j]->id])
+                {
+                    int new_replica_ind = round_robin(replicas_data);
+                    if(new_replica_ind == -1)
+                        break;
+                    chunk_list->chunks[cur_chunk->chunk_id]->replicas[cur_chunk->replicas[j]->id] = all_replicas[new_replica_ind];
+                    free(commit_chunk_list->chunks[i]->replicas[j]);
+                    commit_chunk_list->chunks[i]->replicas[j] = all_replicas[new_replica_ind];
+                    int xd = 3;
                 }
             }
         }
+
+        uint32_t len_CommitChunkList = commit_chunk_list__get_packed_size(commit_chunk_list);
+        uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
+        commit_chunk_list__pack(commit_chunk_list, buffer);
+
+        set_fd_blocking(event_data->peer_data->client_socket);
+        write_len_and_data(event_data->peer_data->client_socket, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size
+
+        print_logs(0, "sent %d payload size to master\n", len_CommitChunkList);
+
+        free(buffer);
+
+        for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+        {
+            free(commit_chunk_list->chunks[i]->path); // disclaimer: tu bedzie segfault
+            free(commit_chunk_list->chunks[i]->replicas);
+            free(commit_chunk_list->chunks[i]);
+        }
+        free(commit_chunk_list);
     }
     else
     {
@@ -449,9 +533,9 @@ int main(int argc, char **argv)
     int                 epoll_fd, running = 1;
     struct epoll_event  event, events[MAX_EVENTS];
     Replica             *all_replicas[1000]; // these are all replicas master knows
-    bool                is_alive[1000];
+    bool                is_alive[1000] = {false}, already_used[1000] = {false};
 
-    replicas_data_t replicas_data = {0, 0, 0, all_replicas, is_alive};
+    replicas_data_t replicas_data = {0, 0, 0, all_replicas, is_alive, already_used};
 
     // print_logs(1, "test %d", 1);
 

@@ -221,7 +221,7 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
             strcpy(replica->ip, replicas_from_master[i]->ip);
             // replica->ip = replicas_from_master[i]->ip; TODO inspect if this is really wrong
             replica->port = replicas_from_master[i]->port;
-
+            replica->id = replicas_from_master[i]->id;
             j++;
         }
     }
@@ -278,8 +278,8 @@ void put_chunk_commit(void *voidPtr)
         }
     }
 
-        free(file_buf);
-        free(proto_buf);
+    free(file_buf);
+    free(proto_buf);
 
     if (ret < 0)
         err_n_die("each replica is dead"); // TODO: don't die send this to master
@@ -681,6 +681,28 @@ void do_write_commit(char *path)
         free(uncommited_chunks[i]);
     free(uncommited_chunks);
 
+    
+    read_payload_and_data(serverfd, &buffer, &payload);
+
+    commit_chunk_list = commit_chunk_list__unpack(NULL, payload, buffer);
+    if (!commit_chunk_list)
+        err_n_die("commit_chunk_list is null");
+    else
+        print_logs(CLI_DEF_LVL, "commit_chunk_list NOT null\n");
+
+    print_logs(0, "commit_chunk_list->n_chunks: %d\n\n", commit_chunk_list->n_chunks);
+    for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+    {
+        print_logs(0, "chunk id: %d, n_replicas: %ld\n", commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->n_replicas);
+
+        for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+        {
+            printf("replica info: \n");
+            print_logs(0, "ip: %s\n", commit_chunk_list->chunks[i]->replicas[j]->ip);
+            print_logs(0, "port: %d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
+        }
+        print_logs(0, "\n");
+    }
 }
 
 int main(int argc, char **argv)

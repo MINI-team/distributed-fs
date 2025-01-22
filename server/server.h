@@ -37,6 +37,7 @@ typedef struct {
     int total_alive_replicas;
     Replica **all_replicas;
     bool *is_alive;
+    bool *already_used;
 } replicas_data_t;
 
 // Function prototypes
