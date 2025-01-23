@@ -68,7 +68,7 @@
 
 #define DEBUG
 
-#define LOG_LEVEL 1
+#define LOG_LEVEL 2
 
 // #define COM_DEF_LVL 7
 // #define MAS_DEF_LVL 6
@@ -76,7 +76,7 @@
 // #define CLI_DEF_LVL 7
 
 #define COM_DEF_LVL 7
-#define MAS_DEF_LVL 1
+#define MAS_DEF_LVL 3
 #define REP_DEF_LVL 1
 #define CLI_DEF_LVL 7
 
