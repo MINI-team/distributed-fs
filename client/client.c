@@ -11,8 +11,6 @@ FILE * debugfd;
 char* received_chunk_path = "test";
 int64_t debug_file_size;
 
-ChunkList *chunk_list_global;
-
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond_main_to_threads = PTHREAD_COND_INITIALIZER;
 pthread_cond_t cond_thread_to_main = PTHREAD_COND_INITIALIZER;
@@ -142,14 +140,14 @@ void put_chunk(void *voidPtr)
 
     file_buf[bytes_read] = '\0';
 
-    uint32_t len_chunkRequestWrite = chunk__get_packed_size(chunk_list_global->chunks[args->chunk_id]);
+    uint32_t len_chunkRequestWrite = chunk__get_packed_size(args->chunk_list_global->chunks[args->chunk_id]);
     uint32_t payload_size = sizeof(uint8_t) + sizeof(uint32_t) + len_chunkRequestWrite
      + sizeof(uint32_t) + bytes_read;
     payload_size = htonl(payload_size);
     op_type = 'w';
 
     uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequestWrite * sizeof(uint8_t));
-    chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
+    chunk__pack(args->chunk_list_global->chunks[args->chunk_id], proto_buf);
 
     for (int i = 0; i < args->n_replicas; i++)
     {
@@ -186,7 +184,7 @@ void put_chunk(void *voidPtr)
     */
 }
 
-void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ack, Chunk **uncommitted_chunks, int chunk_id, char *path, int n_replicas)
+void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ack, Chunk **uncommitted_chunks, int chunk_i, int chunk_id, char *path, int n_replicas)
 {
     int fail_cnt = 0;
     for (int i = 0; i < n_replicas; i++)
@@ -200,7 +198,7 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
 
     Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
     chunk__init(chunk);
-    uncommitted_chunks[chunk_id] = chunk;
+    uncommitted_chunks[chunk_i] = chunk;
 
     chunk->n_replicas = fail_cnt;
     chunk->replicas = (Replica **)malloc(fail_cnt * sizeof(Replica *));
@@ -251,14 +249,14 @@ void put_chunk_commit(void *voidPtr)
 
     file_buf[bytes_read] = '\0';
 
-    uint32_t len_chunkRequestWrite = chunk__get_packed_size(chunk_list_global->chunks[args->chunk_id]);
+    uint32_t len_chunkRequestWrite = chunk__get_packed_size(args->chunk_list_global->chunks[args->chunk_i]);
     uint32_t payload_size = sizeof(uint8_t) + sizeof(uint32_t) + len_chunkRequestWrite
      + sizeof(uint32_t) + bytes_read;
     payload_size = htonl(payload_size);
-    op_type = 'w';
+    op_type = 'w'; // TODO - change to x (have to change in replica as well)
 
     uint8_t *proto_buf = (uint8_t *)malloc(len_chunkRequestWrite * sizeof(uint8_t));
-    chunk__pack(chunk_list_global->chunks[args->chunk_id], proto_buf);
+    chunk__pack(args->chunk_list_global->chunks[args->chunk_i], proto_buf);
 
     for (int i = 0; i < args->n_replicas; i++)
     {
@@ -284,7 +282,7 @@ void put_chunk_commit(void *voidPtr)
     if (ret < 0)
         err_n_die("each replica is dead"); // TODO: don't die send this to master
 
-    print_logs(0, "Waiting for commit\n");
+    print_logs(0, "Waiting for commit for chunk_id %d\n", args->chunk_id);
     uint32_t payload;
     uint8_t *buffer;
 
@@ -332,7 +330,7 @@ void put_chunk_commit(void *voidPtr)
         }
     }
 
-    prepare_uncommitted_chunk(args->replicas, replicas_ack, args->uncommitted_chunks, args->chunk_id, args->path, args->n_replicas);
+    prepare_uncommitted_chunk(args->replicas, replicas_ack, args->uncommitted_chunks, args->chunk_i, args->chunk_id, args->path, args->n_replicas);
 
     close(replicafd);
 }
@@ -370,10 +368,11 @@ void *thread_work(void *data)
     return NULL;
 }
 
-void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args, 
-        ChunkList *chunk_list, char *path, int filefd, Chunk **uncommitted_chunks)
+void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args,
+                     ChunkList *chunk_list, char *path, int filefd, 
+                     Chunk **uncommitted_chunks)
 {
-        pthread_t tid[MAX_THREADS_COUNT];
+    pthread_t tid[MAX_THREADS_COUNT];
 
     for (int i = 0; i < MAX_THREADS_COUNT; i++)
     {
@@ -383,68 +382,18 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
     
     for (int i = 0; i < chunk_list->n_chunks; i++)
     {
-        // argsThread[i].chunk_id = i; // TODO mega wazne !!!!!!!!!!!!!!!!!!!!!!!   
+        argsThread[i].chunk_i = i; // TODO mega wazne !!!!!!!!!!!!!!!!!!!!!!!   
         argsThread[i].chunk_id = chunk_list->chunks[i]->chunk_id; // TODO sprawdzic czy dobrze to zrobilem
+        // okazało sie byc niedobrze zrobione :((((((( , faktycznie bylo mega wazne
         argsThread[i].path = path;
         argsThread[i].n_replicas = chunk_list->chunks[i]->n_replicas;
         argsThread[i].replicas = chunk_list->chunks[i]->replicas;
 
-        argsThread[i].offset = (int64_t) i * CHUNK_SIZE;
+        argsThread[i].offset = (int64_t)chunk_list->chunks[i]->chunk_id * CHUNK_SIZE; // !!!!!!!!!!!!!!
         argsThread[i].filefd = filefd;
         argsThread[i].uncommitted_chunks = uncommitted_chunks;
-    }
 
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-    {
-        pthread_mutex_lock(&mutex);
-        while (thread_pool_args->work_taken == false)
-            pthread_cond_wait(&cond_thread_to_main, &mutex);
-        
-        thread_pool_args->current_chunk = i;
-        thread_pool_args->work_taken = false;
-        pthread_cond_signal(&cond_main_to_threads);
-        pthread_mutex_unlock(&mutex);
-    }
-
-    pthread_mutex_lock(&mutex);
-        while (thread_pool_args->work_taken == false)
-            pthread_cond_wait(&cond_thread_to_main, &mutex);
-
-    thread_pool_args->work_finished = true;
-
-    pthread_cond_broadcast(&cond_main_to_threads);
-    pthread_mutex_unlock(&mutex);
-
-
-    for (int i = 0; i < MAX_THREADS_COUNT; i++)
-        if (pthread_join(tid[i], NULL) != 0)
-            err_n_die("pthread_join error");
-
-    print_logs(3, "All threads joined \n");
-}
-
-void threads_process1(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args, 
-        ChunkList *chunk_list, char *path, int filefd, Chunk **uncommitted_chunks)
-{
-        pthread_t tid[MAX_THREADS_COUNT];
-
-    for (int i = 0; i < MAX_THREADS_COUNT; i++)
-    {
-        if (pthread_create(&tid[i], NULL, &thread_work, (void *)thread_pool_args) != 0)
-            perror("pthread_create error"), exit(1);
-    }
-    
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-    {
-        // argsThread[i].chunk_id = i; // TODO mega wazne !!!!!!!!!!!!!!!!!!!!!!!   
-        argsThread[i].chunk_id = chunk_list->chunks[i]->chunk_id; // TODO sprawdzic czy dobrze to zrobilem
-        argsThread[i].path = path;
-        argsThread[i].n_replicas = chunk_list->chunks[i]->n_replicas;
-        argsThread[i].replicas = chunk_list->chunks[i]->replicas;
-
-        argsThread[i].offset = (int64_t) i * CHUNK_SIZE;
-        argsThread[i].filefd = filefd;
-        argsThread[i].uncommitted_chunks = uncommitted_chunks;
+        argsThread[i].chunk_list_global = chunk_list;
     }
 
     for (int i = 0; i < chunk_list->n_chunks; i++)
@@ -561,7 +510,8 @@ void do_write(char *path)
 
     if (!chunk_list->success)
         err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
-    chunk_list_global = chunk_list;
+    
+    // chunk_list_global = chunk_list;
 
 
 #ifdef DEBUG
@@ -660,134 +610,129 @@ void do_write_commit(char *path)
     write_len_and_data(serverfd, len_fileRequestWrite, buffer);
 
     free(buffer);
-
-    // odbieramy chunkliste 
-    uint32_t payload;
-    read_payload_and_data(serverfd, &buffer, &payload);
-
-    ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
-    if (!chunk_list)
-        err_n_die("chunk_list is null");
-    else
-        print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
-
-    close(serverfd);
-
-    if (!chunk_list->success)
-        err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
-    chunk_list_global = chunk_list;
-
-
-#ifdef DEBUG
-    debug_log(debugfd, "chunk_list->n_chunks: %d\n", chunk_list->n_chunks);
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-    {
-        debug_log(debugfd, "chunk_list->chunks[i]->n_replicas: %ld\n" ,chunk_list->chunks[i]->n_replicas);
-        for (int j = 0; j < chunk_list->chunks[i]->n_replicas; j++)
-        {
-            debug_log(debugfd, "chunk_list->chunks[i]->replicas[j]->ip: %s\n", chunk_list->chunks[i]->replicas[j]->ip);
-            debug_log(debugfd, "chunk_list->chunks[i]->replicas[j]->port: %d\n", chunk_list->chunks[i]->replicas[j]->port);
-        }
-    }
-#endif
-
-    argsThread_t *argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * chunk_list->n_chunks);
     
-    thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
-                        -1, argsThread, true, false, put_chunk_commit};
-
-    Chunk **uncommited_chunks = (Chunk **)malloc(chunk_list->n_chunks * sizeof(Chunk *));
-
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-        uncommited_chunks[i] = NULL;
-
-    threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, uncommited_chunks);
-
-    for(int i = 0; i < chunk_list->n_chunks; i++)
+    uint32_t payload;
+    bool committed = false;
+    while(!committed)
     {
-        if(uncommited_chunks[i])
+        // odbieramy chunkliste
+        read_payload_and_data(serverfd, &buffer, &payload);
+
+        ChunkList *chunk_list = chunk_list__unpack(NULL, payload, buffer);
+        if (!chunk_list)
+            err_n_die("chunk_list is null");
+        else
+            print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
+
+        close(serverfd);
+
+        // print_logs(0, )
+
+        if (!chunk_list->success)
+            err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
+        // chunk_list_global = chunk_list;
+
+        argsThread_t *argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * chunk_list->n_chunks);
+
+        thread_pool_args_t thread_pool_args = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
+                                               -1, argsThread, true, false, put_chunk_commit};
+
+        Chunk **uncommited_chunks = (Chunk **)malloc(chunk_list->n_chunks * sizeof(Chunk *));
+
+        for (int i = 0; i < chunk_list->n_chunks; i++)
+            uncommited_chunks[i] = NULL;
+
+        threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, uncommited_chunks);
+        free(argsThread);
+
+        for (int i = 0; i < chunk_list->n_chunks; i++)
         {
-            print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", i, uncommited_chunks[i]->n_replicas);
-            for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
+            if (uncommited_chunks[i])
             {
-                print_logs(1, "IP: %s, Port: %d\n", 
-                    uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
+                print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", 
+                                chunk_list->chunks[i]->chunk_id, chunk_list->chunks[i]->n_replicas);
+                for (int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
+                {
+                    print_logs(1, "IP: %s, Port: %d\n",
+                               uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
+                }
+            }
+            else
+            {
+                print_logs(1, "\nChunk %d fully commited\n", chunk_list->chunks[i]->chunk_id);
             }
         }
-        else
-        {
-            print_logs(1, "\nChunk %d fully commited\n", i);
-        }
+
+        ChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
+        
+        committed = commit_chunk_list->success;
+
+        setup_connection(&serverfd, master_ip, master_port);
+
+        send_uncommitted_chunks(commit_chunk_list, serverfd);
+
+        // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+        //     free(commit_chunk_list->chunks[i]);
+        free(commit_chunk_list);
+
+        for (int i = 0; i < chunk_list->n_chunks; i++)
+            free(uncommited_chunks[i]);
+        free(uncommited_chunks);
+
+        // read_payload_and_data(serverfd, &buffer, &payload);
+        // commit_chunk_list = chunk_list__unpack(NULL, payload, buffer);
+        // if (!commit_chunk_list)
+        //     err_n_die("commit_chunk_list is null");
+        // else
+        //     print_logs(CLI_DEF_LVL, "commit_chunk_list NOT null\n");
+
+        // print_logs(0, "commit_chunk_list->n_chunks: %d\n\n", commit_chunk_list->n_chunks);
+        // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
+        // {
+        //     print_logs(0, "chunk id: %d, n_replicas: %ld\n", commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->n_replicas);
+
+        //     for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+        //     {
+        //         print_logs(0, "replica info: \n");
+        //         print_logs(0, "ip: %s\n", commit_chunk_list->chunks[i]->replicas[j]->ip);
+        //         print_logs(0, "port: %d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
+        //     }
+        //     print_logs(0, "\n");
+        // }
     }
-    free(argsThread);
-
-    ChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
-
-    setup_connection(&serverfd, master_ip, master_port);
     
-    send_uncommitted_chunks(commit_chunk_list, serverfd);
+    
+    
+    // argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * commit_chunk_list->n_chunks);
+    
+    // thread_pool_args_t thread_pool_args1 = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
+    //                     -1, argsThread, true, false, put_chunk_commit};
+
+    // // Chunk **uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
+    // uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
 
     // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
-    //     free(commit_chunk_list->chunks[i]);
-    free(commit_chunk_list);
+    //     uncommited_chunks[i] = NULL;
 
-    for (int i = 0; i < chunk_list->n_chunks; i++)
-        free(uncommited_chunks[i]);
-    free(uncommited_chunks);
+    // threads_process1(argsThread, &thread_pool_args1, commit_chunk_list, path, filefd, uncommited_chunks);
 
-    
-    read_payload_and_data(serverfd, &buffer, &payload);
-
-    commit_chunk_list = chunk_list__unpack(NULL, payload, buffer);
-    if (!commit_chunk_list)
-        err_n_die("commit_chunk_list is null");
-    else
-        print_logs(CLI_DEF_LVL, "commit_chunk_list NOT null\n");
-
-    print_logs(0, "commit_chunk_list->n_chunks: %d\n\n", commit_chunk_list->n_chunks);
-    for (int i = 0; i < commit_chunk_list->n_chunks; i++)
-    {
-        print_logs(0, "chunk id: %d, n_replicas: %ld\n", commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->n_replicas);
-
-        for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
-        {
-            print_logs(0, "replica info: \n");
-            print_logs(0, "ip: %s\n", commit_chunk_list->chunks[i]->replicas[j]->ip);
-            print_logs(0, "port: %d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
-        }
-        print_logs(0, "\n");
-    }
-    
-    argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * commit_chunk_list->n_chunks);
-    
-    thread_pool_args_t thread_pool_args1 = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
-                        -1, argsThread, true, false, put_chunk_commit};
-
-    // Chunk **uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
-    uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
-
-    for (int i = 0; i < commit_chunk_list->n_chunks; i++)
-        uncommited_chunks[i] = NULL;
-
-    threads_process1(argsThread, &thread_pool_args1, commit_chunk_list, path, filefd, uncommited_chunks);
-
-    for(int i = 0; i < commit_chunk_list->n_chunks; i++)
-    {
-        if(uncommited_chunks[i])
-        {
-            print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", i, uncommited_chunks[i]->n_replicas);
-            for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
-            {
-                print_logs(1, "IP: %s, Port: %d\n", 
-                    uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
-            }
-        }
-        else
-        {
-            print_logs(1, "\nChunk %d fully commited\n", i);
-        }
-    }
-    free(argsThread);
+    // for(int i = 0; i < commit_chunk_list->n_chunks; i++)
+    // {
+    //     if(uncommited_chunks[i])
+    //     {
+    //         print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", i, uncommited_chunks[i]->n_replicas);
+    //         for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
+    //         {
+    //             print_logs(1, "IP: %s, Port: %d\n", 
+    //                 uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
+    //         }
+    //     }
+    //     else
+    //     {
+    //         print_logs(1, "\nChunk %d fully commited\n", i);
+    //     }
+    // }
+    // free(argsThread);
 }
 
 int main(int argc, char **argv)

@@ -20,7 +20,7 @@ char master_ip[IP_LENGTH] = "127.0.0.1";
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
-    print_logs(0, "\n\nNew client connected\n\n\n");
+    print_logs(0, "\n\nNew client connected\n\n");
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
         // print_logs(MAS_DEF_LVL, "Server couldnt accept client\n");
@@ -107,7 +107,8 @@ int round_robin(replicas_data_t *replicas_data)
     int *replica_robin_index = &(replicas_data->replica_robin_index);
     bool *is_alive = replicas_data->is_alive;
     bool *already_used = replicas_data->already_used;
-    
+    Replica **all_replicas = replicas_data->all_replicas;
+
     if (total_alive_replicas < REPLICATION_FACTOR)
     {
         // TODO disconnect the client
@@ -120,9 +121,9 @@ int round_robin(replicas_data_t *replicas_data)
     while (!is_alive[rand_ind] || already_used[rand_ind])
     {
         if (!is_alive[rand_ind])
-            printf("Replica %d is dead, incrementing rand_ind\n", rand_ind);
+            printf("Replica %d is dead, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         if (already_used[rand_ind])
-            printf("Replica %d is already_used, incrementing rand_ind\n", rand_ind);
+            printf("Replica %d is already_used, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         rand_ind = (rand_ind + 1) % replicas_count;
     }
 
@@ -315,7 +316,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     }
     else if (op_type == 'c')
     {
-        print_logs(0, "=======================\nMaster received commit request\n=======================\n\n\n");
+        print_logs(0, "\n=======================\nMaster received commit request\n=======================\n\n");
 
         ChunkList *commit_chunk_list = chunk_list__unpack(
             NULL, 
@@ -330,6 +331,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, commit_chunk_list->path);
         if(commit_chunk_list->success)
         {
+            print_logs(0, "No uncommited chunks\nFile %s fully committed\n=======================\n", commit_chunk_list->path);
             chunk_list->committed = true;
             chunk_list__free_unpacked(commit_chunk_list, NULL);
             return;
@@ -373,6 +375,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
                 if (!is_alive[cur_replica_id])
                 {
+                    print_logs(0, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
                     int new_replica_ind = round_robin(replicas_data);
                     if (new_replica_ind == -1)
                         break;
@@ -381,7 +384,6 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                     free(commit_chunk_list->chunks[i]->replicas[replica_ind_ccl]);
                     commit_chunk_list->chunks[i]->replicas[replica_ind_ccl] = all_replicas[new_replica_ind];
                     replica_ind_ccl++;
-                    int xd = 3;
                 }
             }
             
@@ -390,6 +392,8 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 already_used[index_stack[--stack_size]] = false;
             }
         }
+
+        commit_chunk_list->success = true; // czyli nie ma problemu typu file already exists albo master zapchany
 
         uint32_t len_CommitChunkList = chunk_list__get_packed_size(commit_chunk_list);
         uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
@@ -578,7 +582,7 @@ int main(int argc, char **argv)
         
         // MAX_EVENTS: 1000, przyjdzie na raz 30 
         int event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1); //connect
-        print_logs(MAS_DEF_LVL, "Ready events: %d \n", event_count);
+        print_logs(MAS_DEF_LVL, "\nReady events: %d \n", event_count);
 
         for (int i = 0; i < event_count; i++) 
         {
