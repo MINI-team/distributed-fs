@@ -481,7 +481,7 @@ void processWriteRequest(int epoll_fd, char *path, int id, uint8_t *data, int le
                          peer_type_t peer_type, event_data_t *event_data)
 {
     char chunkname[MAX_FILENAME_LENGTH];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk",
+    snprintf(chunkname, sizeof(chunkname), "data_replica/%s%d.chunk",
              replica_port, path, id);
     print_logs(REP_DEF_LVL, "chunkname: %s\n", chunkname);
     write_to_disk(chunkname, data, length);
