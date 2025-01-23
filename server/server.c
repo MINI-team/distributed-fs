@@ -317,7 +317,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     {
         print_logs(0, "=======================\nMaster received commit request\n=======================\n\n\n");
 
-        CommitChunkList *commit_chunk_list = commit_chunk_list__unpack(
+        ChunkList *commit_chunk_list = chunk_list__unpack(
             NULL, 
             event_data->peer_data->payload_size - 1, 
             event_data->peer_data->buffer + 1
@@ -331,7 +331,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         if(commit_chunk_list->success)
         {
             chunk_list->committed = true;
-            commit_chunk_list__free_unpacked(commit_chunk_list, NULL);
+            chunk_list__free_unpacked(commit_chunk_list, NULL);
             return;
         }
 
@@ -391,9 +391,9 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             }
         }
 
-        uint32_t len_CommitChunkList = commit_chunk_list__get_packed_size(commit_chunk_list);
+        uint32_t len_CommitChunkList = chunk_list__get_packed_size(commit_chunk_list);
         uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
-        commit_chunk_list__pack(commit_chunk_list, buffer);
+        chunk_list__pack(commit_chunk_list, buffer);
 
         set_fd_blocking(event_data->peer_data->client_socket);
         write_len_and_data(event_data->peer_data->client_socket, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size

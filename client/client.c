@@ -424,7 +424,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
 }
 
 void threads_process1(argsThread_t *argsThread, thread_pool_args_t *thread_pool_args, 
-        CommitChunkList *chunk_list, char *path, int filefd, Chunk **uncommitted_chunks)
+        ChunkList *chunk_list, char *path, int filefd, Chunk **uncommitted_chunks)
 {
         pthread_t tid[MAX_THREADS_COUNT];
 
@@ -587,10 +587,10 @@ void do_write(char *path)
     free(argsThread);
 }
 
-CommitChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommited_chunks)
+ChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommited_chunks)
 {
-    CommitChunkList *commit_chunk_list = (CommitChunkList *)malloc(sizeof(CommitChunkList));
-    commit_chunk_list__init(commit_chunk_list);
+    ChunkList *commit_chunk_list = (ChunkList *)malloc(sizeof(ChunkList));
+    chunk_list__init(commit_chunk_list);
     int uncommited_chunks_cnt = 0;
 
     for (int i = 0; i < n_chunks; i++)
@@ -619,12 +619,12 @@ CommitChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **unc
     return commit_chunk_list;
 }
 
-void send_uncommitted_chunks(CommitChunkList *commit_chunk_list, int serverfd)
+void send_uncommitted_chunks(ChunkList *commit_chunk_list, int serverfd)
 {
-    uint32_t len_CommitChunkList = commit_chunk_list__get_packed_size(commit_chunk_list) + sizeof(uint8_t);
+    uint32_t len_CommitChunkList = chunk_list__get_packed_size(commit_chunk_list) + sizeof(uint8_t);
     uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
     buffer[0] = 'c';
-    commit_chunk_list__pack(commit_chunk_list, buffer + sizeof(uint8_t));
+    chunk_list__pack(commit_chunk_list, buffer + sizeof(uint8_t));
 
     write_len_and_data(serverfd, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size
     
@@ -721,7 +721,7 @@ void do_write_commit(char *path)
     }
     free(argsThread);
 
-    CommitChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
+    ChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
 
     setup_connection(&serverfd, master_ip, master_port);
     
@@ -738,7 +738,7 @@ void do_write_commit(char *path)
     
     read_payload_and_data(serverfd, &buffer, &payload);
 
-    commit_chunk_list = commit_chunk_list__unpack(NULL, payload, buffer);
+    commit_chunk_list = chunk_list__unpack(NULL, payload, buffer);
     if (!commit_chunk_list)
         err_n_die("commit_chunk_list is null");
     else
