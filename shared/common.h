@@ -95,7 +95,7 @@
 
 #define CHUNK_SIZE 32000000 // 32MB zabije
 
-#define MAX_THREADS_COUNT 32
+#define MAX_THREADS_COUNT 1
 // #define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
 #define TIMEOUT_SEC 3
 #define TIMEOUT_MSEC 0
