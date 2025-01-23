@@ -100,6 +100,23 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     free(buffer);
 }
 
+void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket)
+{
+    print_logs(MAS_DEF_LVL, "DISCONNECT\n");
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
+        err_n_die("epoll_ctl error");
+
+    free(event_data->peer_data->buffer);
+    if (event_data->peer_data->out_buffer)
+    {
+        free(event_data->peer_data->out_buffer);
+        event_data->peer_data->out_buffer = NULL;
+    }
+    free(event_data->peer_data);
+    free(event_data);
+    close(client_socket);
+}
+
 int round_robin(replicas_data_t *replicas_data)
 {
     int replicas_count = replicas_data->replicas_count;
@@ -346,8 +363,8 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] == true)
                 {
                    (*total_alive_replicas)--;
-                   print_logs(0, "Replica %d detected as dead, decrementing total_alive_replicas to %d\n",
-                                    commit_chunk_list->chunks[i]->replicas[j]->port, (*total_alive_replicas));
+                   print_logs(0, "From chunk %d replica %d detected as dead, decrementing total_alive_replicas to %d\n",
+                                     commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->replicas[j]->port, (*total_alive_replicas));
                 }
                 is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] = false;
             }
@@ -383,9 +400,11 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             {
                 int32_t cur_replica_id = chunk_list->chunks[cur_chunk_id]->replicas[j]->id;
 
-                if (!is_alive[cur_replica_id]) 
+                // if (!is_alive[cur_replica_id]) 
                 // TODO ATTENTION - if we kill a replica during write, it may have ack'd this chunk,
                 // so it wasn't in commit_chunk_list; however, it's marked as dead, because it didn't ack some later chunks
+                if (replica_ind_ccl < commit_chunk_list->chunks[i]->n_replicas &&
+                        are_replicas_same(chunk_list->chunks[cur_chunk_id]->replicas[j], commit_chunk_list->chunks[i]->replicas[replica_ind_ccl])) 
                 {
                     print_logs(2, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
                     int new_replica_ind = round_robin(replicas_data);
@@ -455,23 +474,6 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
     // FileRequest *fileRequest = file_request__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
     // print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", fileRequest->path);
-}
-
-void disconnect_client(int epoll_fd, event_data_t *event_data, int client_socket)
-{
-    print_logs(MAS_DEF_LVL, "DISCONNECT\n");
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_socket, NULL))
-        err_n_die("epoll_ctl error");
-
-    free(event_data->peer_data->buffer);
-    if (event_data->peer_data->out_buffer)
-    {
-        free(event_data->peer_data->out_buffer);
-        event_data->peer_data->out_buffer = NULL;
-    }
-    free(event_data->peer_data);
-    free(event_data);
-    close(client_socket);
 }
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
