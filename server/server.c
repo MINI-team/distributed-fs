@@ -352,29 +352,42 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
         for (int i = 0; i < commit_chunk_list->n_chunks; i++)
         {
-            Chunk *cur_chunk = commit_chunk_list->chunks[i];
+            int32_t cur_chunk_id = commit_chunk_list->chunks[i]->chunk_id;
             
-            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            // for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            for (int j = 0; j < chunk_list->chunks[cur_chunk_id]->n_replicas; j++)
             {
-                if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id])
+                int32_t cur_replica_id = chunk_list->chunks[cur_chunk_id]->replicas[j]->id;
+
+                if (is_alive[cur_replica_id])
                 {
-                    already_used[commit_chunk_list->chunks[i]->replicas[j]->id] = true;
-                    index_stack[stack_size++] = commit_chunk_list->chunks[i]->replicas[j]->id; // TODO usuwamy to
+                    already_used[cur_replica_id] = true;
+                    index_stack[stack_size++] = cur_replica_id; // TODO usuwamy to
                 }
             }
 
-            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            int replica_ind_ccl = 0; // ccl - commit_chunk_list
+            for (int j = 0; j < chunk_list->chunks[cur_chunk_id]->n_replicas; j++)
             {
-                if (!is_alive[commit_chunk_list->chunks[i]->replicas[j]->id])
+                int32_t cur_replica_id = chunk_list->chunks[cur_chunk_id]->replicas[j]->id;
+
+                if (!is_alive[cur_replica_id])
                 {
                     int new_replica_ind = round_robin(replicas_data);
-                    if(new_replica_ind == -1)
+                    if (new_replica_ind == -1)
                         break;
-                    chunk_list->chunks[cur_chunk->chunk_id]->replicas[cur_chunk->replicas[j]->id] = all_replicas[new_replica_ind];
-                    free(commit_chunk_list->chunks[i]->replicas[j]);
-                    commit_chunk_list->chunks[i]->replicas[j] = all_replicas[new_replica_ind];
+
+                    chunk_list->chunks[cur_chunk_id]->replicas[j] = all_replicas[new_replica_ind];
+                    free(commit_chunk_list->chunks[i]->replicas[replica_ind_ccl]);
+                    commit_chunk_list->chunks[i]->replicas[replica_ind_ccl] = all_replicas[new_replica_ind];
+                    replica_ind_ccl++;
                     int xd = 3;
                 }
+            }
+            
+            while(stack_size > 0)
+            {
+                already_used[index_stack[--stack_size]] = false;
             }
         }
 

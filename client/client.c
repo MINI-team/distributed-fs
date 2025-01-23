@@ -271,7 +271,7 @@ void put_chunk_commit(void *voidPtr)
                 (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
                 (ret = write_len_and_data(replicafd, bytes_read, file_buf)) == -2)
             {
-                print_logs(3, "Broken pipe, replica crashed\n");
+                print_logs(0, "Broken pipe, replica crashed\n");
                 continue;
             }
             break;
@@ -284,7 +284,7 @@ void put_chunk_commit(void *voidPtr)
     if (ret < 0)
         err_n_die("each replica is dead"); // TODO: don't die send this to master
 
-    print_logs(5, "Waiting for commit\n");
+    print_logs(0, "Waiting for commit\n");
     uint32_t payload;
     uint8_t *buffer;
 
@@ -446,10 +446,6 @@ void threads_process1(argsThread_t *argsThread, thread_pool_args_t *thread_pool_
         argsThread[i].filefd = filefd;
         argsThread[i].uncommitted_chunks = uncommitted_chunks;
     }
-
-
-
-    int taktyczna_zmienna;
 
     for (int i = 0; i < chunk_list->n_chunks; i++)
     {
@@ -639,7 +635,6 @@ void send_uncommitted_chunks(CommitChunkList *commit_chunk_list, int serverfd)
 
 void do_write_commit(char *path)
 {
-    sleep(2);
     int err, filefd, serverfd;
     int bytes_read;
 
@@ -756,14 +751,12 @@ void do_write_commit(char *path)
 
         for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
         {
-            printf("replica info: \n");
+            print_logs(0, "replica info: \n");
             print_logs(0, "ip: %s\n", commit_chunk_list->chunks[i]->replicas[j]->ip);
             print_logs(0, "port: %d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
         }
         print_logs(0, "\n");
     }
-
-    sleep(2);
     
     argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * commit_chunk_list->n_chunks);
     
