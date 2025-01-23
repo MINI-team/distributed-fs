@@ -96,6 +96,9 @@ void get_chunk(void *voidPtr)
 
             free(proto_buf);
             free(buffer);
+
+            print_logs(2, "Chunk id %d, disconnected from replica %d\n\n",
+            args->chunk_id, args->replicas[i]->port);
             
             break;
         }
@@ -153,8 +156,8 @@ void put_chunk(void *voidPtr)
     {
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
-                args->replicas[i]->port);
+            print_logs(2, "Chunk id %d, connected to replica %d\n",
+                    args->chunk_id, args->replicas[i]->port);
             if ((ret = bulk_write(replicafd, &payload_size, sizeof(payload_size))) == -2 ||
                 (ret = bulk_write(replicafd, &op_type, 1)) == -2 ||
                 (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
@@ -163,6 +166,10 @@ void put_chunk(void *voidPtr)
                 print_logs(3, "Broken pipe, replica crashed\n");
                 continue;
             }
+            
+            print_logs(2, "Chunk id %d, disconnected from replica %d\n\n",
+            args->chunk_id, args->replicas[i]->port);
+
             break;
         }
     }
@@ -265,8 +272,8 @@ void put_chunk_commit(void *voidPtr)
     {
         if ((ret = setup_connection_retry(&replicafd, args->replicas[i]->ip, args->replicas[i]->port)) == 0)
         {
-            print_logs(CLI_DEF_LVL, "\n=============================\nConnected to replica %d\n===================================\n",
-                args->replicas[i]->port);
+            print_logs(2, "Chunk id %d, connected to replica %d\n",
+                    args->chunk_id, args->replicas[i]->port);
             if ((ret = bulk_write(replicafd, &payload_size, sizeof(payload_size))) == -2 ||
                 (ret = bulk_write(replicafd, &op_type, 1)) == -2 ||
                 (ret = write_len_and_data(replicafd, len_chunkRequestWrite, proto_buf)) == -2 ||
@@ -275,6 +282,10 @@ void put_chunk_commit(void *voidPtr)
                 print_logs(0, "Broken pipe, replica crashed\n");
                 continue;
             }
+            
+            print_logs(2, "Chunk id %d, disconnected from replica %d\n\n",
+            args->chunk_id, args->replicas[i]->port);
+
             break;
         }
         else
@@ -432,7 +443,7 @@ void threads_process(argsThread_t *argsThread, thread_pool_args_t *thread_pool_a
         if (pthread_join(tid[i], NULL) != 0)
             err_n_die("pthread_join error");
 
-    print_logs(3, "All threads joined \n");
+    print_logs(2, "All threads joined \n");
 }
 
 void do_read(char *path)
@@ -476,7 +487,9 @@ void do_read(char *path)
 
     threads_process(argsThread, &thread_pool_args, chunk_list, path, filefd, NULL);
 
-    free(argsThread);   
+    free(argsThread);
+
+    print_logs(1, "Thread memory freed\n");
 }
 
 void do_write(char *path)
@@ -790,4 +803,6 @@ int main(int argc, char **argv)
         do_write_commit(path);
     else
         err_n_die("usage: wrong client request");
+
+    print_logs(1, "Client ended successfully\n");
 }

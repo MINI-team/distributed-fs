@@ -97,7 +97,7 @@
 
 // #define MAX_THREADS_COUNT 1
 #define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
-#define TIMEOUT_SEC 3
+#define TIMEOUT_SEC 10
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3

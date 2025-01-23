@@ -198,7 +198,7 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
             
             Replica *replica = all_replicas[rand_ind];
             chunk->replicas[j] = replica;
-            print_logs(MAS_DEF_LVL, "Chunkowi %d przydzielono replike nr %d, IP: %s, port: %d\n",
+            print_logs(1, "Chunkowi %d przydzielono replike nr %d, IP: %s, port: %d\n",
                 i, rand_ind, all_replicas[rand_ind]->ip, all_replicas[rand_ind]->port);
             
             rand_ind = (rand_ind + 1) % replicas_count;
