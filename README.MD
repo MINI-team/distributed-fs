@@ -7,7 +7,8 @@
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
 bash setup.bash
 # mkdir build
-mkdir -p build/replica/data_replica1/8080/chunks build/replica/data_replica1/8081/chunks build/replica/data_replica1/8082/chunks build/replica/data_replica1/8083/chunks build/replica/data_replica1/8084/chunks build/replica/data_replica1/8085/chunks
+mkdir -p build/replica/data_replica1/8080/chunks build/replica/data_replica1/8081/chunks build/replica/data_replica1/8082/chunks build/replica/data_replica1/8083/chunks build/replica/data_replica1/8084/chunks build/replica/data_replica1/8085/chunks # deprecated <-------------------
+mkdir -p ~/dfs/chunks/8080 ~/dfs/chunks/8080 ~/dfs/chunks/8080 ~/dfs/chunks/8080 ~/dfs/chunks/8080 ~/dfs/chunks/8080 
 cd build
 cmake ..
 make
