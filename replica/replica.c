@@ -383,7 +383,7 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
 void processReadRequest(int epoll_fd, event_data_t *event_data, char *path, int id)
 {
     char chunkname[MAX_FILENAME_LENGTH];
-    snprintf(chunkname, sizeof(chunkname), "data_replica1/%d/chunks/%s%d.chunk", replica_port, path, id);
+    snprintf(chunkname, sizeof(chunkname), "data_replica/%s%d.chunk", path, id);
     print_logs(REP_DEF_LVL, "chunkname: %s\n", chunkname);
     readChunkFile(epoll_fd, event_data, chunkname);
 }
