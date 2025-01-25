@@ -902,6 +902,7 @@ void handle_sigint(int sig)
 
 int main(int argc, char **argv)
 {
+    printf("health check\n");
     int             server_socket, epoll_fd;
     event_data_t    *server_event_data;
     struct          epoll_event events[MAX_EVENTS];
