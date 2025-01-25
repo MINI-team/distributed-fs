@@ -66,7 +66,7 @@
 #define REPLICA_SERVER_PORT_4 8084
 #endif
 
-#define DEBUG
+// #define DEBUG
 
 #define LOG_LEVEL 2
 
