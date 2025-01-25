@@ -510,7 +510,7 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
 
     for (int i = 0; i < chunk->n_replicas; i++)
     {
-        if (strcmp(chunk->replicas[i]->ip, replica_port) == 0
+        if (strcmp(chunk->replicas[i]->ip, replica_ip) == 0
                  && chunk->replicas[i]->port == replica_port)
             continue;
         
