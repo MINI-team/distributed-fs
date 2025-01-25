@@ -210,7 +210,7 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
     chunk->n_replicas = fail_cnt;
     chunk->replicas = (Replica **)malloc(fail_cnt * sizeof(Replica *));
     chunk->chunk_id = chunk_id;
-    chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char));
+    chunk->path = (char *)malloc(strlen(path) + 1);
     strcpy(chunk->path, path);
 
     int j = 0;
@@ -245,7 +245,7 @@ void put_chunk_commit(void *voidPtr)
     bool replicas_ack[REPLICATION_FACTOR] = {false}; // TODO: check if it's good; little wasteful, but should work OK
     // bool replicas_ack[args->chunk_list_global->chunks[args->chunk_i]->n_replicas] = {false}; // TODO: check if it's good
 
-    uint8_t* file_buf = (uint8_t *)malloc(CHUNK_SIZE * sizeof(uint8_t));
+    uint8_t* file_buf = (uint8_t *)malloc(CHUNK_SIZE + 1); // +1 for the '\0'
 
     if ((bytes_read = pread(args->filefd, file_buf, CHUNK_SIZE, args->offset)) < 0)
         err_n_die("put_chunk read error");
@@ -256,6 +256,16 @@ void put_chunk_commit(void *voidPtr)
             args->chunk_id, bytes_read, CHUNK_SIZE, modulo);
 
     file_buf[bytes_read] = '\0';
+
+    /*
+        Client Protocol - Details of the message sent to the replica:
+        - Payload size: 4 bytes, total size of the entire message
+        - Operation type: 1 byte
+        - len_chunkRequestWrite: 4 bytes, specifies the length of the proto buffer
+        - proto_buf: (len_chunkRequestWrite) bytes
+        - bytes_read: 4 bytes, size of the chunk data
+        - file_buf: (bytes_read) bytes, contains the actual file data
+    */
 
     uint32_t len_chunkRequestWrite = chunk__get_packed_size(args->chunk_list_global->chunks[args->chunk_i]);
     uint32_t payload_size = sizeof(uint8_t) + sizeof(uint32_t) + len_chunkRequestWrite
@@ -349,6 +359,8 @@ void put_chunk_commit(void *voidPtr)
             err_n_die("Replica sent malicious message - Received chunk commit report for %d replica, FAIL for IP:%s, port: %d\n",
                    i, chunk_commit_report->ip, chunk_commit_report->port);
         }
+        free(buffer);
+        chunk_commit_report__free_unpacked(chunk_commit_report, NULL);
     }
 
     prepare_uncommitted_chunk(args->replicas, replicas_ack, args->uncommitted_chunks, args->chunk_i, args->chunk_id, args->path, args->n_replicas);
@@ -570,7 +582,7 @@ ChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommite
         if (uncommited_chunks[i])
             uncommited_chunks_cnt++;
 
-    commit_chunk_list->path = (char *)malloc(strlen(path) * sizeof(char));
+    commit_chunk_list->path = (char *)malloc((strlen(path) + 1) * sizeof(char));
     strcpy(commit_chunk_list->path, path);
     commit_chunk_list->n_chunks = uncommited_chunks_cnt; // may be 0, then it's success
 
@@ -628,7 +640,7 @@ void do_write_commit(char *path)
     buffer[0] = 'x';
     file_request_write__pack(&fileRequestWrite, buffer + sizeof(uint8_t));
 
-    setup_connection(&serverfd, master_ip, master_port);
+    setup_connection(&serverfd, master_ip, master_port); // TODO ogarniecie jak master nie dziala
         
     write_len_and_data(serverfd, len_fileRequestWrite, buffer);
 
@@ -648,8 +660,8 @@ void do_write_commit(char *path)
             print_logs(CLI_DEF_LVL, "chunk_list NOT null\n");
 
         close(serverfd);
+        free(buffer);
 
-        // print_logs(0, )
 
         if (!chunk_list->success)
             err_n_die("FAIL: file already exists\n"); // TODO add abort with cleanup, free everything
@@ -696,78 +708,22 @@ void do_write_commit(char *path)
 
         // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
         //     free(commit_chunk_list->chunks[i]);
+        free(commit_chunk_list->path);
         free(commit_chunk_list);
 
         for (int i = 0; i < chunk_list->n_chunks; i++)
-            free(uncommited_chunks[i]);
+            if (uncommited_chunks[i])
+                free(uncommited_chunks[i]);
         free(uncommited_chunks);
 
-        // read_payload_and_data(serverfd, &buffer, &payload);
-        // commit_chunk_list = chunk_list__unpack(NULL, payload, buffer);
-        // if (!commit_chunk_list)
-        //     err_n_die("commit_chunk_list is null");
-        // else
-        //     print_logs(CLI_DEF_LVL, "commit_chunk_list NOT null\n");
-
-        // print_logs(0, "commit_chunk_list->n_chunks: %d\n\n", commit_chunk_list->n_chunks);
-        // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
-        // {
-        //     print_logs(0, "chunk id: %d, n_replicas: %ld\n", commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->n_replicas);
-
-        //     for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
-        //     {
-        //         print_logs(0, "replica info: \n");
-        //         print_logs(0, "ip: %s\n", commit_chunk_list->chunks[i]->replicas[j]->ip);
-        //         print_logs(0, "port: %d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
-        //     }
-        //     print_logs(0, "\n");
-        // }
+        chunk_list__free_unpacked(chunk_list, NULL);
     }
-    
-    
-    
-    // argsThread = (argsThread_t *)malloc(sizeof(argsThread_t) * commit_chunk_list->n_chunks);
-    
-    // thread_pool_args_t thread_pool_args1 = {&mutex, &cond_main_to_threads, &cond_thread_to_main,
-    //                     -1, argsThread, true, false, put_chunk_commit};
-
-    // // Chunk **uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
-    // uncommited_chunks = (Chunk **)malloc(commit_chunk_list->n_chunks * sizeof(Chunk *));
-
-    // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
-    //     uncommited_chunks[i] = NULL;
-
-    // threads_process1(argsThread, &thread_pool_args1, commit_chunk_list, path, filefd, uncommited_chunks);
-
-    // for(int i = 0; i < commit_chunk_list->n_chunks; i++)
-    // {
-    //     if(uncommited_chunks[i])
-    //     {
-    //         print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", i, uncommited_chunks[i]->n_replicas);
-    //         for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
-    //         {
-    //             print_logs(1, "IP: %s, Port: %d\n", 
-    //                 uncommited_chunks[i]->replicas[j]->ip, uncommited_chunks[i]->replicas[j]->port);
-    //         }
-    //     }
-    //     else
-    //     {
-    //         print_logs(1, "\nChunk %d fully commited\n", i);
-    //     }
-    // }
-    // free(argsThread);
 }
 
 int main(int argc, char **argv)
 {
     char operation[20]; //TODO refactor
     char path[256];
-
-#ifdef DEBUG
-    debugfd = fopen(CLIENT_DEBUG_PATH, "w");
-    if (!debugfd)
-        err_n_die("debugfd open error");
-#endif
 
 #ifdef RELEASE
     if (argc != 6)
