@@ -310,12 +310,11 @@ void write_to_peer(int epoll_fd, event_data_t *event_data)
         &(event_data->peer_data->left_to_send)
     );
 
-
     if(peer_type == CLIENT_WRITE)
     {
         print_logs(3, "After bulk_write_nonblock left_to_send is %d\n", event_data->peer_data->left_to_send);
     }
-    print_logs(REP_DEF_LVL, "poszlo bytes_written: %d, w sumie wyslano: %d; out_payload size to: %d\n",
+    // print_logs(REP_DEF_LVL, "poszlo bytes_written: %d, w sumie wyslano: %d; out_payload size to: %d\n",
      bytes_written, event_data->peer_data->bytes_sent, event_data->peer_data->out_payload_size);
 
     if (bytes_written == -2)
