@@ -510,8 +510,8 @@ int forwardChunk(int epoll_fd, Chunk *chunk, uint32_t chunk_size, uint8_t *buffe
 
     for (int i = 0; i < chunk->n_replicas; i++)
     {
-        if (chunk->replicas[i]->port == replica_port) // SIMPLE HEURISTIC FOR NOW,
-                                                      // should add ip as well
+        if (strcmp(chunk->replicas[i]->ip, replica_port) == 0
+                 && chunk->replicas[i]->port == replica_port)
             continue;
         
         ret = setup_connection_retry(&replicafd, chunk->replicas[i]->ip, chunk->replicas[i]->port);
