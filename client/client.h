@@ -11,6 +11,7 @@ typedef struct argsThread
     pthread_t tid;
     char *path;
     int chunk_id;
+    int chunk_i;
 
     // Replicas data
     int n_replicas;
@@ -24,7 +25,9 @@ typedef struct argsThread
     int64_t filesize; // for debug reasons, to be deleted
 
     Chunk **uncommitted_chunks; // array of Chunk pointers, each by default set to NULL
-    
+
+    ChunkList *chunk_list_global;
+
 } argsThread_t;
 
 typedef struct thread_pool_args

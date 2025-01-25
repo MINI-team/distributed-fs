@@ -68,7 +68,7 @@
 
 #define DEBUG
 
-#define LOG_LEVEL 1
+#define LOG_LEVEL 2
 
 // #define COM_DEF_LVL 7
 // #define MAS_DEF_LVL 6
@@ -76,7 +76,7 @@
 // #define CLI_DEF_LVL 7
 
 #define COM_DEF_LVL 7
-#define MAS_DEF_LVL 1
+#define MAS_DEF_LVL 3
 #define REP_DEF_LVL 1
 #define CLI_DEF_LVL 7
 
@@ -97,7 +97,7 @@
 
 // #define MAX_THREADS_COUNT 1
 #define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
-#define TIMEOUT_SEC 3
+#define TIMEOUT_SEC 10
 #define TIMEOUT_MSEC 0
 
 #define REPLICATION_FACTOR 3
