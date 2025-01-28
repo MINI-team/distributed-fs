@@ -20,12 +20,11 @@ char master_ip[IP_LENGTH] = "127.0.0.1";
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
-    print_logs(0, "\n\nNew client connected\n\n");
+    print_logs(1, "\n============================================================================\n");
+    print_logs(1, "New client connected\n");
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
-        // print_logs(MAS_DEF_LVL, "Server couldnt accept client\n");
         err_n_die("Server couldnt accept client");
-        // return;
     }
 
     event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
@@ -69,7 +68,7 @@ void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_lis
     }
     
     uint32_t chunk_list_len = chunk_list__get_packed_size(chunk_list);
-    print_logs(MAS_DEF_LVL, "I will send this client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
+    print_logs(MAS_DEF_LVL, "Will send client chunk_list_len=%lu bytes\n", sizeof(chunk_list_len));
     uint8_t *buffer = (uint8_t *)malloc(chunk_list_len * sizeof(uint8_t));
     chunk_list__pack(chunk_list, buffer);
 
@@ -129,7 +128,8 @@ int round_robin(replicas_data_t *replicas_data)
     if (total_alive_replicas < REPLICATION_FACTOR)
     {
         // TODO disconnect the client
-        print_logs(2, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
+        print_logs(1, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\nCan't allocate chunks for this file\n",
+                        total_alive_replicas, REPLICATION_FACTOR);
         return -1;
     }
 
@@ -138,13 +138,13 @@ int round_robin(replicas_data_t *replicas_data)
     while (!is_alive[rand_ind] || already_used[rand_ind])
     {
         if (!is_alive[rand_ind])
-            print_logs(2, "Replica %d is dead, incrementing rand_ind\n", all_replicas[rand_ind]->port);
+            print_logs(3, "Replica %d is dead, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         if (already_used[rand_ind])
-            print_logs(2, "Replica %d is already_used, incrementing rand_ind\n", all_replicas[rand_ind]->port);
+            print_logs(3, "Replica %d is already_used, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         rand_ind = (rand_ind + 1) % replicas_count;
     }
 
-    print_logs(2, "\nReplica %d assigned\n\n", all_replicas[rand_ind]->port);
+    print_logs(3, "\nReplica %d assigned\n\n", all_replicas[rand_ind]->port);
 
     *replica_robin_index = (*replica_robin_index + 1) % replicas_count;
 
@@ -162,7 +162,7 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
     if (total_alive_replicas < REPLICATION_FACTOR)
     {
         // TODO disconnect the client 
-        print_logs(0, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\n", total_alive_replicas, REPLICATION_FACTOR);
+        print_logs(1, "total_alive_replicas: %d < REPLICATION_FACTOR: %d\nCan't allocate chunks for this file\n", total_alive_replicas, REPLICATION_FACTOR);
         return;
     }
     int chunks_number = (size + CHUNK_SIZE - 1) / CHUNK_SIZE;
@@ -181,25 +181,26 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
         Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
         chunk__init(chunk);
         chunk->chunk_id = i;
-        chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // to be modified (we shouldnt be using constant length)
+        chunk->path = (char *)malloc(MAX_FILENAME_LENGTH * sizeof(char)); // TODO: modify (we shouldnt be using constant length)
         strcpy(chunk->path, path);
         chunk->n_replicas = REPLICATION_FACTOR;
         chunk->replicas = (Replica **)malloc(REPLICATION_FACTOR * sizeof(Replica *));
         int rand_ind = *replica_robin_index;
 
-        // Replica *replicas[REPLICATION_FACTOR];
+        print_logs(1, "\nChunk %d replicas:\n", i);
+
         for (int j = 0; j < REPLICATION_FACTOR; j++)
         {     
             while (!is_alive[rand_ind])
             {
-                print_logs(1, "Replica %d is dead, incrementing rand_ind\n", rand_ind);
+                print_logs(3, "Replica %d is dead, incrementing rand_ind\n", rand_ind);
                 rand_ind = (rand_ind + 1) % replicas_count;
             }
             
             Replica *replica = all_replicas[rand_ind];
             chunk->replicas[j] = replica;
-            print_logs(1, "Chunkowi %d przydzielono replike nr %d, IP: %s, port: %d\n",
-                i, rand_ind, all_replicas[rand_ind]->ip, all_replicas[rand_ind]->port);
+            print_logs(1, "%d:   IP: %s, port: %d\n",
+                j+1, all_replicas[rand_ind]->ip, all_replicas[rand_ind]->port);
             
             rand_ind = (rand_ind + 1) % replicas_count;
         }
@@ -213,8 +214,6 @@ void add_file(char* path, int64_t size, replicas_data_t *replicas_data, GHashTab
 
 void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *replicas_data, GHashTable *hash_table)
 {
-    // int *replicas_count = &(replicas_data->replicas_count);
-    // Replica **all_replicas = replicas_data->all_replicas;
     int *replicas_count = &(replicas_data->replicas_count);
     int *total_alive_replicas = &(replicas_data->total_alive_replicas);
     int *replica_robin_index = &(replicas_data->replica_robin_index);
@@ -230,21 +229,24 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     {
         print_logs(MAS_DEF_LVL, "write request detected \n");
         print_logs(MAS_DEF_LVL, "event_data->peer_data->payload_size - 1: %d\n", event_data->peer_data->payload_size - 1);
-        print_logs(MAS_DEF_LVL, "halo\n");
+        
         FileRequestWrite *fileRequestWrite = file_request_write__unpack(
             NULL,
             event_data->peer_data->payload_size - 1,
             event_data->peer_data->buffer + 1
         );
         if (!fileRequestWrite)
-            err_n_die("ups");
+            err_n_die("protobuf unpack error");
+        
+        print_logs(1, "Received write request for file %s\n", fileRequestWrite->path);
+
         print_logs(MAS_DEF_LVL, "fileRequestWrite->path: %s\n", fileRequestWrite->path);
         print_logs(MAS_DEF_LVL, "fileRequestWrite->size: %ld\n", fileRequestWrite->size);
 
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
         {
-            print_logs(MAS_DEF_LVL, "File already exists\n");
+            print_logs(MAS_DEF_LVL, "File %s already exists\n", fileRequestWrite->path);
             setup_outbound(epoll_fd, event_data, NULL);
             return;
         }
@@ -254,14 +256,15 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         chunk_list = g_hash_table_lookup(hash_table, fileRequestWrite->path);
         if (chunk_list)
         {
-            print_logs(MAS_DEF_LVL, "oho i hit client: %d\n", event_data->peer_data->client_socket);
+            print_logs(MAS_DEF_LVL, "Sending ChunkList of file %s to client\n", 
+                                        fileRequestWrite->path);
 
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
         {
-            print_logs(MAS_DEF_LVL, "not found \n");
-            err_n_die("should never happen\n");
+            print_logs(MAS_DEF_LVL, "File %s not found, ", fileRequestWrite->path);
+            err_n_die("undefined\n");
         }
     }
     else if (op_type == 'r')
@@ -273,13 +276,13 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         
         if (!chunk_list || !chunk_list->committed)
         {
-            print_logs(0, "The file was null or uncommitted\n");
+            print_logs(1, "File %s was null or uncommitted\n", FileRequestRead->path);
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
         {
             setup_outbound(epoll_fd, event_data, chunk_list);
-            print_logs(MAS_DEF_LVL, "not found \n");
+            print_logs(MAS_DEF_LVL, "File %s not found \n", FileRequestRead->path);
         }
     }
     else if(op_type == 'n')
@@ -292,28 +295,27 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             if (is_alive[i] && all_replicas[i]->port == replica->port 
                     && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(0, "Replica IP: %s, port: %d is already registered. Rejecting.\n",
+                print_logs(1, "Replica - IP: %s, port: %d is already registered\n",
                         all_replicas[i]->ip, all_replicas[i]->port);
 
-                print_logs(0, "Replicas count: %d\n", *replicas_count);
-                print_logs(0, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
+                print_logs(1, "Replicas count: %d\n", *replicas_count);
+                print_logs(1, "Total alive replicas: %d\n", replicas_data->total_alive_replicas);
                 return;
             }
             if (!is_alive[i] && all_replicas[i]->port == replica->port
                 && strcmp(all_replicas[i]->ip, replica->ip) == 0)
             {
-                print_logs(0, "Replica IP: %s, port: %d will be registered back.\n", 
+                print_logs(1, "Replica - IP: %s, port: %d will be registered back\n", 
                         all_replicas[i]->ip, all_replicas[i]->port);
                 
                 is_alive[i] = true;
                 (*total_alive_replicas)++;
-                print_logs(0, "Replicas count: %d\n", *replicas_count);
-                print_logs(0, "Total alive replicas: %d\n", *total_alive_replicas);
+                print_logs(1, "Replicas count: %d\n", *replicas_count);
+                print_logs(1, "Total alive replicas: %d\n", *total_alive_replicas);
                 return;
             }
         }
 
-        // calloc()
         all_replicas[*replicas_count] = (Replica *)malloc(sizeof(Replica));
         replica__init(all_replicas[*replicas_count]);
         all_replicas[*replicas_count]->ip = (char *)malloc(IP_LENGTH * sizeof(char)); // Allocating memory for IP
@@ -322,7 +324,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         strcpy(all_replicas[*replicas_count]->ip, replica->ip);
         all_replicas[*replicas_count]->port = replica->port;
         
-        print_logs(2, "Replica IP: %s, port: %d registered.\n", 
+        print_logs(1, "New replica - IP: %s, port: %d registered\n", 
                 all_replicas[*replicas_count]->ip, all_replicas[*replicas_count]->port);
 
         (*replicas_count)++;
@@ -335,7 +337,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     }
     else if (op_type == 'c')
     {
-        print_logs(0, "\n=======================\nMaster received commit request\n=======================\n");
+        print_logs(1, "Master received commit request\n");
 
         ChunkList *commit_chunk_list = chunk_list__unpack(
             NULL, 
@@ -350,7 +352,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         ChunkList* chunk_list = g_hash_table_lookup(hash_table, commit_chunk_list->path);
         if(commit_chunk_list->success)
         {
-            print_logs(0, "No uncommited chunks\nFile %s fully committed\n=======================\n", commit_chunk_list->path);
+            print_logs(1, "No uncommited chunks\nFile %s fully committed\n", commit_chunk_list->path);
             chunk_list->committed = true;
             chunk_list__free_unpacked(commit_chunk_list, NULL);
             return;
@@ -363,7 +365,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] == true)
                 {
                    (*total_alive_replicas)--;
-                   print_logs(0, "From chunk %d replica %d detected as dead, decrementing total_alive_replicas to %d\n",
+                   print_logs(1, "From chunk %d replica %d detected as dead, decrementing total_alive_replicas to %d\n",
                                      commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->replicas[j]->port, (*total_alive_replicas));
                 }
                 is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] = false;
@@ -377,7 +379,6 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         {
             int32_t cur_chunk_id = commit_chunk_list->chunks[i]->chunk_id;
             
-            // for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
             for (int j = 0; j < chunk_list->chunks[cur_chunk_id]->n_replicas; j++)
             {
                 int32_t cur_replica_id = chunk_list->chunks[cur_chunk_id]->replicas[j]->id;
@@ -389,31 +390,34 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 }
             }
 
-            print_logs(0, "Chunk with id %d wasn't fully committed; faulty replicas:\n", cur_chunk_id);
+            print_logs(1, "Chunk %d wasn't fully committed; faulty replicas:\n", cur_chunk_id);
             for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
             {
-                print_logs(0, "%d\n", commit_chunk_list->chunks[i]->replicas[j]->port);
+                print_logs(1, "IP: %s, port %d\n", 
+                            commit_chunk_list->chunks[i]->replicas[j]->ip,
+                            commit_chunk_list->chunks[i]->replicas[j]->port);
             }
+
+            print_logs(1, "\nChunk %d new replicas:\n", i);
 
             int replica_ind_ccl = 0; // ccl - commit_chunk_list
             for (int j = 0; j < chunk_list->chunks[cur_chunk_id]->n_replicas; j++)
             {
                 int32_t cur_replica_id = chunk_list->chunks[cur_chunk_id]->replicas[j]->id;
 
-                // if (!is_alive[cur_replica_id]) 
-                // TODO ATTENTION - if we kill a replica during write, it may have ack'd this chunk,
-                // so it wasn't in commit_chunk_list; however, it's marked as dead, because it didn't ack some later chunks
                 if (replica_ind_ccl < commit_chunk_list->chunks[i]->n_replicas &&
                         are_replicas_same(chunk_list->chunks[cur_chunk_id]->replicas[j], commit_chunk_list->chunks[i]->replicas[replica_ind_ccl])) 
                 {
-                    print_logs(2, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
+                    print_logs(1, "Faulty replica %d:   IP: %s, port: %d\n",
+                                j+1, chunk_list->chunks[cur_chunk_id]->replicas[j]->ip, chunk_list->chunks[cur_chunk_id]->replicas[j]->port);
+                    print_logs(3, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
                     int new_replica_ind = round_robin(replicas_data);
                     if (new_replica_ind == -1)
                     {
                         disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
                         for (int i = 0; i < commit_chunk_list->n_chunks; i++)
                         {
-                            free(commit_chunk_list->chunks[i]->path); // disclaimer: tu bedzie segfault
+                            free(commit_chunk_list->chunks[i]->path);
                             free(commit_chunk_list->chunks[i]->replicas);
                             free(commit_chunk_list->chunks[i]);
                         }
@@ -421,8 +425,11 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                         return;
                     }
 
+                    print_logs(1, "New replica %d:   IP: %s, port: %d\n",
+                                j+1, all_replicas[new_replica_ind]->ip, all_replicas[new_replica_ind]->port);
+
                     already_used[new_replica_ind] = true;
-                    index_stack[stack_size++] = new_replica_ind; // TODO usuwamy to
+                    index_stack[stack_size++] = new_replica_ind;
 
                     chunk_list->chunks[cur_chunk_id]->replicas[j] = all_replicas[new_replica_ind];
                     free(commit_chunk_list->chunks[i]->replicas[replica_ind_ccl]);
@@ -437,16 +444,16 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             }
         }
 
-        commit_chunk_list->success = true; // czyli nie ma problemu typu file already exists albo master zapchany
+        commit_chunk_list->success = true; // i.e. no problem like file already exists or master kernel buffer full
 
         uint32_t len_CommitChunkList = chunk_list__get_packed_size(commit_chunk_list);
         uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
         chunk_list__pack(commit_chunk_list, buffer);
 
         set_fd_blocking(event_data->peer_data->client_socket);
-        write_len_and_data(event_data->peer_data->client_socket, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size
+        write_len_and_data(event_data->peer_data->client_socket, len_CommitChunkList, buffer);
 
-        print_logs(0, "sent %d payload size to client\n", len_CommitChunkList);
+        print_logs(3, "sent %d payload size to client\n", len_CommitChunkList);
 
         disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
 
@@ -454,7 +461,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
 
         for (int i = 0; i < commit_chunk_list->n_chunks; i++)
         {
-            free(commit_chunk_list->chunks[i]->path); // disclaimer: tu bedzie segfault
+            free(commit_chunk_list->chunks[i]->path);
             free(commit_chunk_list->chunks[i]->replicas);
             free(commit_chunk_list->chunks[i]);
         }
@@ -471,9 +478,6 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         free(event_data);
         return;
     }
-
-    // FileRequest *fileRequest = file_request__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
-    // print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", fileRequest->path);
 }
 
 void write_to_client(int epoll_fd, event_data_t *client_event_data)
@@ -484,14 +488,12 @@ void write_to_client(int epoll_fd, event_data_t *client_event_data)
         &(client_event_data->peer_data->left_to_send)
     );
 
-    // int bytes_written = bulk_write_nonblock(client_event_data->peer_data);
-
     if (bytes_written == -1)
         return;
     if (bytes_written == client_event_data->peer_data->out_payload_size)
         disconnect_client(epoll_fd, client_event_data, client_event_data->peer_data->client_socket);
     else
-        err_n_die("NIGGA WHAAT THE FUUUUUUUUUUUUUUUUUUCK");
+        err_n_die("undefined");
 }
 
 void handle_new_client_payload_declaration(int epoll_fd, event_data_t *event_data)
@@ -571,6 +573,11 @@ void handle_client(int epoll_fd, event_data_t *event_data, replicas_data_t *repl
         err_n_die("undefined");
 }
 
+// void print_help()
+// {
+//     print_logs(0, "Usage:\n./server   (ip will be 127.0.0.1 and port 9001)\nOR\n/server port   (ip will be 127.0.0.1)\nOR\n./server ip port\n");
+// }
+
 int main(int argc, char **argv)
 {   
     srand(time(NULL));
@@ -582,8 +589,6 @@ int main(int argc, char **argv)
     bool                is_alive[1000] = {false}, already_used[1000] = {false};
 
     replicas_data_t replicas_data = {0, 0, 0, all_replicas, is_alive, already_used};
-
-    // print_logs(1, "test %d", 1);
 
 #ifdef RELEASE
     if (argc != 3)
@@ -604,9 +609,11 @@ int main(int argc, char **argv)
 
     server_setup(&server_socket, &epoll_fd, &event);
 
+    print_logs(1, "Master, IP: %s, port: %d started running\n\n", master_ip, master_port);
+
     while (running) 
     {
-        print_logs(2, "\n Master IP: %s, port: %d polling for events \n",
+        print_logs(MAS_DEF_LVL, "\n Master IP: %s, port: %d polling for events \n",
                 master_ip, master_port);
         
         // MAX_EVENTS: 1000, przyjdzie na raz 30 
@@ -636,7 +643,7 @@ int main(int argc, char **argv)
                 } 
                 else
                 {
-                    err_n_die("SHOULDNT HAPPEN!!!");
+                    err_n_die("undefined (client event was other than EPOLLIN or EPOLLOUT)");
                 }
             }
         }

@@ -605,7 +605,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
     if (event_data->peer_type == REPLICA_SECUNDO)
     {
-        print_logs(3, "\n===================\nRECEIVED ACKNOWLEDGEMENT FROM SECONDARY\n\n");
+        print_logs(3, "Received acknowledgement from secondary, forwarding to client\n");
 
                 // handle this
 
@@ -613,7 +613,7 @@ void process_request(int epoll_fd, event_data_t *event_data)
         if (!current_connections[event_data->peer_data->true_client_connection_id])
         {
             // TODO disconnect replica
-            printf("CLIENT disconnected, ACK aborted\n");
+            print_logs(3, "CLIENT disconnected, ACK aborted\n");
             return;
         }
 
@@ -663,8 +663,8 @@ void process_request(int epoll_fd, event_data_t *event_data)
         // if it's not zero, then we are in the middle of writing and it's true that we sent some
         event_data_with_client->peer_data->left_to_send += additional_payload_size;
 
-        printf("event_data_with_client->peer_data->left_to_send: %d\n", event_data_with_client->peer_data->left_to_send);
-        printf("event_data_with_client->peer_data->out_payload_size: %d\n", event_data_with_client->peer_data->out_payload_size);
+        print_logs(5, "event_data_with_client->peer_data->left_to_send: %d\n", event_data_with_client->peer_data->left_to_send);
+        print_logs(5, "event_data_with_client->peer_data->out_payload_size: %d\n", event_data_with_client->peer_data->out_payload_size);
 
         event_data_with_client->peer_data->out_buffer =
             (uint8_t *)realloc(event_data_with_client->peer_data->out_buffer, 
@@ -706,19 +706,14 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
     if (op_type == 'r')
     {
-        print_logs(REP_DEF_LVL, "received read request\n");
-     
         ChunkRequest *chunkRequest = chunk_request__unpack(NULL, proto_len, proto_buf);
         if (!chunkRequest)
             err_n_die("process_request, chunkRequest is null");
-
-        print_logs(REP_DEF_LVL, "chunkRequest->path: %s\n", chunkRequest->path);
-        print_logs(REP_DEF_LVL, "chunkRequest->chunk_id: %d\n", chunkRequest->chunk_id);
+        
+        print_logs(1, "Received read request for chunk %s%d\n", chunkRequest->path, chunkRequest->chunk_id);
 
         processReadRequest(epoll_fd, event_data, chunkRequest->path, chunkRequest->chunk_id);
-        // REPLACE THIS <-----------------------------------------------------------
-        // REPLACE THIS <-----------------------------------------------------------
-        // REPLACE THIS <-----------------------------------------------------------
+
         chunk_request__free_unpacked(chunkRequest, NULL);
         return;
     }
@@ -737,6 +732,12 @@ void process_request(int epoll_fd, event_data_t *event_data)
 
         if (!chunk)
             err_n_die("process_request, chunk is null");
+
+        if(op_type == 'w')
+            print_logs(1, "Received write request from client for chunk %s%d. Writing to disk and forwarding\n", 
+                                chunk->path, chunk->chunk_id);
+        else if(op_type == 'd')
+            print_logs(1, "Received forwarded chunk %s%d from primary\n", chunk->path, chunk->chunk_id);
 
         // print_logs(REP_DEF_LVL, "chunk->path: %s\n", chunk->path);
         print_logs(REP_DEF_LVL, "chunk->chunk_id: %d\n", chunk->chunk_id);
@@ -896,7 +897,7 @@ void register_to_master(int epoll_fd)
 
 void handle_sigint(int sig) 
 {
-    printf("\nCaught SIGINT, graceful shutdown...\n");
+    print_logs(0, "\nCaught SIGINT, graceful shutdown...\n");
     running = 0;
 }
 
@@ -937,6 +938,8 @@ int main(int argc, char **argv)
     signal(SIGINT, handle_sigint);    
     server_setup(&server_event_data, &server_socket, replica_ip, replica_port, &epoll_fd);
     register_to_master(epoll_fd);
+
+    print_logs(1, "Replica, IP: %s, port: %d started running\n\n", replica_ip, replica_port);
 
     while (running)
     {

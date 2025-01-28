@@ -106,25 +106,6 @@ int bulk_read(int fd, void *buf, int count)
     return len;
 }
 
-// int bulk_write(int fd, void *buf, int count)
-// {
-//     print_logs(COM_DEF_LVL, "count: %d\n", count); //32000000
-//     int c;
-//     int len = 0;
-//     do
-//     {
-//         // c = TEMP_FAILURE_RETRY(write(fd, buf, count));
-//         c = write(fd, buf, count); // this return -1
-//         print_logs(COM_DEF_LVL, "tutaj c: %d\n", c);
-//         if (c < 0)
-//             return c;
-//         buf += c;
-//         len += c;
-//         count -= c;
-//     } while (count > 0);
-//     return len;
-// }
-
 int bulk_write(int fd, const void *buf, int count)
 {
     print_logs(COM_DEF_LVL, "count: %zu\n", count);
@@ -135,7 +116,7 @@ int bulk_write(int fd, const void *buf, int count)
     while (count > 0)
     {
         int c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
-        print_logs(COM_DEF_LVL, "bulk_write: po write, c = %d\n", c);
+        print_logs(COM_DEF_LVL, "bulk_write: after write, c = %d\n", c);
         if (c < 0) {
             
             if (errno == EPIPE || errno == ECONNRESET)
@@ -146,7 +127,7 @@ int bulk_write(int fd, const void *buf, int count)
         }
         if (c == 0) {
             fprintf(stderr, "No more data could be written.\n");
-            return -2;
+            return -2; // TODO: why -2 here?
             // return total_written;
         }
         p             += c;
@@ -155,33 +136,6 @@ int bulk_write(int fd, const void *buf, int count)
     }
     return total_written;
 }
-
-// int bulk_write_nonblock(client_data_t *client_data)
-// {
-//     int c;
-//     do
-//     {
-//         c = TEMP_FAILURE_RETRY(write(client_data->client_socket, 
-//             client_data->out_buffer + client_data->bytes_sent, 
-//             client_data->left_to_send
-//         ));
-        
-//         if (c < 0)
-//         {
-//             if (errno == EAGAIN || errno == EWOULDBLOCK)
-//             {
-//                 print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
-//                 return -1;
-//             }
-//             err_n_die("read error"); // maybe replace THIS <--------------------------------
-//             // -----------------------------------------------------------------------------
-//         }
-        
-//         client_data->bytes_sent += c;
-//         client_data->left_to_send -= c;
-//     } while (client_data->left_to_send > 0);
-//     return client_data->bytes_sent;
-// }
 
 int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
 {
@@ -222,7 +176,7 @@ int read_payload_size(int fd, bool *timeout)
     /* We expect that first four bytes coming should be an integer declaring payload */
     int net_payload;
     int bytes_read;
-    // print_logs(COM_DEF_LVL, "wejdzie\n");
+
     if ((bytes_read = read(fd, &net_payload, sizeof(net_payload))) < 0)
     {
         if (errno == EWOULDBLOCK || errno == EAGAIN)
@@ -233,13 +187,13 @@ int read_payload_size(int fd, bool *timeout)
         }
         else if (errno == EPIPE || errno == ECONNRESET) // TODO read shouldn't result in EPIPE
         {
-            print_logs(3, "EPIPE/ECONNRESET in bulk_read, broken pipe\n");
+            print_logs(4, "EPIPE/ECONNRESET in bulk_read, broken pipe\n");
             return -2;
         }
         err_n_die("read error 230");
     }
     print_logs(COM_DEF_LVL, "bytes_read: %d\n", bytes_read);
-    // print_logs(COM_DEF_LVL, "a to nie wejdzie\n");
+
     if (bytes_read != sizeof(net_payload))
         // abort_with_cleanup("Server sent incomplete payload size\n Try again\n", fd);
         return -2;
@@ -262,7 +216,6 @@ bool read_payload_and_data(int fd, uint8_t **buffer, uint32_t *payload)
     {
         print_logs(COM_DEF_LVL, "\n\nread_payload_and_data: bulk_read TIMEOUT\n\n");
         return true;
-        // err_n_die("read_payload_and_data bytes_read: %d, payload: %d\n", bytes_read, *payload);
     }
 
     return false;
@@ -276,7 +229,7 @@ int write_len_and_data(int fd, uint32_t len, uint8_t *data)
     {
         if (sent == -2)
             return -2;
-        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
+        err_n_die("writing payload size didn't succeed\nwrote %d bytes, but should've written %d\n",
             sent, (int)sizeof(net_len));
     }
 
@@ -284,7 +237,7 @@ int write_len_and_data(int fd, uint32_t len, uint8_t *data)
     {
         if (sent == -2)
             return -2;
-        err_n_die("writing length didn't succeed\nwrote %d bytes, but should've written %d\n",
+        err_n_die("writing data didn't succeed\nwrote %d bytes, but should've written %d\n",
                   sent, len);
     }
     return sent;

@@ -68,35 +68,24 @@
 
 // #define DEBUG
 
-#define LOG_LEVEL 2
+#define LOG_LEVEL 1
 
 // #define COM_DEF_LVL 7
 // #define MAS_DEF_LVL 6
 // #define REP_DEF_LVL 7
 // #define CLI_DEF_LVL 7
 
-#define COM_DEF_LVL 7
-#define MAS_DEF_LVL 3
-#define REP_DEF_LVL 1
-#define CLI_DEF_LVL 7
-
-// #define CHUNK_SIZE 4096
-// #define CHUNK_SIZE 4096
-// #define CHUNK_SIZE 3554432
-// #define CHUNK_SIZE 355443
-// #define CHUNK_SIZE 100000 // imp
-// #define CHUNK_SIZE 300000 // tested
-// #define CHUNK_SIZE 3000000
-// #define CHUNK_SIZE 32760
-
-// #define CHUNK_SIZE 1000
+#define COM_DEF_LVL 6
+#define MAS_DEF_LVL 6
+#define REP_DEF_LVL 6
+#define CLI_DEF_LVL 6
 
 // #define CHUNK_SIZE 1
 
-#define CHUNK_SIZE 32000000 // 32MB zabije
+#define CHUNK_SIZE 32000000
 
 // #define MAX_THREADS_COUNT 1
-#define MAX_THREADS_COUNT 16 // uwaga na slabych komputerach to zabije
+#define MAX_THREADS_COUNT 16 // CAUTION: probably shouldn't exceed thread count of the CPU (nproc command to check that)
 #define TIMEOUT_SEC 10
 #define TIMEOUT_MSEC 0
 
@@ -158,25 +147,15 @@ struct event_data_t {
     };
 };
 
-// typedef struct {
-//     int id;
-//     char *ip;
-//     int32_t port;
-//     int stored_chunks; // not needed?
-//     bool isAlive;
-// } replica_info_t;
-
 void err_n_die(const char *fmt, ...);
 char *bin2hex(const unsigned char *input, size_t len);
 int set_fd_nonblocking(int fd);
 char *resolve_host(char *host_name);
-// void debug_log(int debugfd, const char *fmt, ...);
 void debug_log(FILE *debugfd, const char *fmt, ...);
 
 int bulk_read(int fd, void *buf, int count);
 int read_payload_size(int fd, bool *timeout);
 int bulk_write(int fd, const void *buf, int count);
-// int bulk_write_nonblock(peer_data_t *peer_data);
 int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send);
 
 void abort_with_cleanup(char *msg, int serverfd);
