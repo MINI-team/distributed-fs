@@ -3,71 +3,25 @@
    ```bash
 
 ##############################
-# WRITE && READ DEMO
+# LOCAL DEMO
 ##############################
 sudo apt install protobuf-c-compiler libprotobuf-c-dev libglib2.0-dev
 bash setup.bash
-mkdir -p build/replica/chunks/8080 build/replica/chunks/8081 build/replica/chunks/8082 build/replica/chunks/8083 build/replica/chunks/8084 build/replica/chunks/8085/chunks
-# or use make-dirs.sh
+mkdir -p build/replica/chunks/8080 build/replica/chunks/8081 build/replica/chunks/8082
+# or use make-dirs.sh (it will create directories for 10 replicas)
 cd build
 cmake ..
 make
-cp ../data_client/alphabet client/alphabet
-cd replica
-./replica 8080
-cd replica
-./replica 8081
-cd server
-./server
+cp ../data_client/alphabet client/alphabet # or place other (probably larger) file inside build/client
+
+# on separate terminals:
+cd replica && ./replica 8080
+cd replica && ./replica 8081
+cd replica && ./replica 8082
+cd server && ./server
+
 cd client
-./client write test
-./client read test
+./client write alphabet # or write-committed
+./client read alphabet
 
-##############################
-# WRITE
-##############################
-
-cd .. # start in home (distributed-fs)
-# do previous setup
-rm data_replica1/8080/chunks/* && rm data_replica1/8081/chunks/* # to see that (many) replicas write the chunks
-cd build
-./replica/replica 8080
-./replica/replica 8081
-./server/server
-./client/client write komar.txt
-   ```
-
-Chunks data for replica1 is stored in data_replica1/chunks
-
-
-------------------------------------------------------------------------
-Important issues:
-
-malicious client sends too big request
-
-uint32_t len = ntohl(net_len);
-if (len > MAX_ALLOWED_SIZE) {
-    fprintf(stderr, "Requested length too large, rejecting request.\n");
-    close(client_socket);
-    continue;
-}
-
-graceful shutdown
-
-Handling Invalid/Corrupted Protocol Buffers:
-FileRequest *fileRequest = file_request__unpack(NULL, len, client_read_buffer);
-if (fileRequest == NULL) {
-    fprintf(stderr, "Failed to unpack protobuf message.\n");
-    free(client_read_buffer);
-    close(client_socket);
-    continue;
-}
-
-client_socket = accept(server_socket, (SA *)NULL, NULL);
-if (client_socket < 0) {
-    perror("accept failed");
-    continue;
-}
-
-
-Currently, client_socket is closed after processing a request, which is good, but make sure to properly handle all edge cases where the client connection could fail before closing.
+# to clear replica storage use remove-chunks.sh; if you don't have folders for all replicas with ports 8080..8089 it will show some errors, but it's not a problem; or you can manually remove the files from build/replica/chunks/{port}
