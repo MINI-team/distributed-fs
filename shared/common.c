@@ -108,15 +108,12 @@ int bulk_read(int fd, void *buf, int count)
 
 int bulk_write(int fd, const void *buf, int count)
 {
-    print_logs(COM_DEF_LVL, "count: %zu\n", count);
-
     const unsigned char *p = buf;  // safer for pointer arithmetic
     int total_written  = 0;
 
     while (count > 0)
     {
         int c = write(fd, p, count); // is this write going to actually white until server reads the whole thing, using read()?
-        print_logs(COM_DEF_LVL, "bulk_write: after write, c = %d\n", c);
         if (c < 0) {
             
             if (errno == EPIPE || errno == ECONNRESET)
@@ -147,12 +144,10 @@ int bulk_write_nonblock(int fd, void *buf, int *bytes_sent, int *left_to_send)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                print_logs(COM_DEF_LVL, "EAGAIN/EWOULDBLOCK, returning from bulk_write_nonblock to go towards epoll_wait\n");
                 return -1;
             }
             if (errno == EPIPE || errno == ECONNRESET)
             {
-                print_logs(3, "EPIPE/ECONNRESET in bulk_write_nonblock, broken pipe\n");
                 return -2;
             }
             err_n_die("write error");

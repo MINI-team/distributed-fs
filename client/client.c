@@ -188,9 +188,12 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
     int fail_cnt = 0;
     for (int i = 0; i < n_replicas; i++)
     {
+        // if (!replicas_ack[i] || (i != 0 && chunk_id == 53 && (strcmp(path, "1_2GB") == 0 || strcmp(path, "2_2GB") == 0))) // TEMPORARY, TODO: REMOVE || i == 0
         if (!replicas_ack[i])
             fail_cnt++;
     }
+
+    print_logs(0, "prepare_uncommitted_chunk %d, fail_cnt: %d\n", chunk_i, fail_cnt);
 
     if(fail_cnt == 0)
         return;
@@ -208,6 +211,7 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
     int j = 0;
     for (int i = 0; i < n_replicas; i++)
     {
+        // if (!replicas_ack[i] || (i != 0 && chunk_id == 53 && (strcmp(path, "1_2GB") == 0 || strcmp(path, "2_2GB") == 0))) // TEMPORARY, TODO: REMOVE || i == 0
         if (!replicas_ack[i])
         {
             Replica *replica = (Replica *)malloc(sizeof(Replica));
@@ -222,6 +226,8 @@ void prepare_uncommitted_chunk(Replica **replicas_from_master, bool *replicas_ac
             j++;
         }
     }
+
+    print_logs(0, "prepare_uncommitted_chunk %d, fail_cnt: %d, after allocating the chunk and replicas\n", chunk_i, fail_cnt);
 }
 
 void put_chunk_commit(void *voidPtr)
@@ -318,26 +324,20 @@ void put_chunk_commit(void *voidPtr)
 
     for (int i = 0; i < REPLICATION_FACTOR; i++)
     {
-        // TO ADD: use timeout = read_payload....;
+        // TODO: use timeout = read_payload....;
         if(read_payload_and_data(replicafd, &buffer, &payload) == true)
         {
-            print_logs(1, "Timeout for replica %d\n", i);
+            print_logs(1, "Timeout for chunk %d replica %d\n", args->chunk_id, i);
             // err_n_die("was timeout");
             continue;
         }
         ChunkCommitReport *chunk_commit_report = chunk_commit_report__unpack(NULL, payload, buffer);
         if (chunk_commit_report->is_success)
         {
-            print_logs(3, "Received chunk commit report for %d replica, success for IP: %s, port: %d\n",
-                   i, chunk_commit_report->ip, chunk_commit_report->port);
+            print_logs(2, "Received chunk commit report for file %s%d, %d replica, success for IP: %s, port: %d\n",
+                   args->path, args->chunk_id, i, chunk_commit_report->ip, chunk_commit_report->port);
             for (int j = 0; j < args->n_replicas; j++)
             {
-
-                // printf("args->replicas[j]->ip: %s\n", args->replicas[j]->ip);
-                // printf("chunk_commit_report->ip: %s\n", chunk_commit_report->ip);
-                // printf("args->replicas[j]->port: %d\n", args->replicas[j]->port);
-                // printf("chunk_commit_report->port: %d\n", chunk_commit_report->port);
-
                 if (strcmp(args->replicas[j]->ip, chunk_commit_report->ip) == 0
                     && args->replicas[j]->port == chunk_commit_report->port)
                 {
@@ -355,6 +355,7 @@ void put_chunk_commit(void *voidPtr)
         chunk_commit_report__free_unpacked(chunk_commit_report, NULL);
     }
 
+    print_logs(0, "\n\n\nput_chunk_commit, before calling prepare_uncommitted_chunk\n");
     prepare_uncommitted_chunk(args->replicas, replicas_ack, args->uncommitted_chunks, args->chunk_i, args->chunk_id, args->path, args->n_replicas);
 
     close(replicafd);
@@ -582,8 +583,10 @@ ChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommite
     strcpy(commit_chunk_list->path, path);
     commit_chunk_list->n_chunks = uncommited_chunks_cnt; // may be 0, then it's success
 
+    // if (true) // TEMPORARY, TODO: CHANGE THIS BACK
     if (uncommited_chunks_cnt == 0)
     {
+        // commit_chunk_list->n_chunks = 0; // normally unnecessary, but need for testing (temporary)
         commit_chunk_list->success = true;
         commit_chunk_list->chunks = NULL;
         return commit_chunk_list;
@@ -603,9 +606,17 @@ ChunkList* prepare_commit_chunk_list(char *path, int n_chunks, Chunk **uncommite
 void send_uncommitted_chunks(ChunkList *commit_chunk_list, int serverfd)
 {
     uint32_t len_CommitChunkList = chunk_list__get_packed_size(commit_chunk_list) + sizeof(uint8_t);
+
+    print_logs(0, "After chunk_list__get_packed_size\n");
+
     uint8_t *buffer = (uint8_t *)malloc(len_CommitChunkList * sizeof(uint8_t));
+
+    print_logs(0, "After malloc\n");
+    
     buffer[0] = 'c';
     chunk_list__pack(commit_chunk_list, buffer + sizeof(uint8_t));
+
+    print_logs(0, "After chunk_list__pack\n");
 
     write_len_and_data(serverfd, len_CommitChunkList, buffer); // here i send the len_CommitChunkList and on the server i get client delcared invalid payload size
     
@@ -678,7 +689,7 @@ void do_write_commit(char *path)
             if (uncommited_chunks[i])
             {
                 print_logs(1, "\nChunk %d is not fully commited\nFaulty replicas (%d):\n", 
-                                chunk_list->chunks[i]->chunk_id, chunk_list->chunks[i]->n_replicas);
+                                chunk_list->chunks[i]->chunk_id, uncommited_chunks[i]->n_replicas);
                 for (int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
                 {
                     print_logs(1, "IP: %s, Port: %d\n",
@@ -691,25 +702,52 @@ void do_write_commit(char *path)
             }
         }
 
+        print_logs(0, "After prints\n");
+
         ChunkList *commit_chunk_list = prepare_commit_chunk_list(path, chunk_list->n_chunks, uncommited_chunks);
+
+        print_logs(0, "After prepare_commit_chunk_list\n");
         
         committed = commit_chunk_list->success;
 
         setup_connection(&serverfd, master_ip, master_port);
 
+        print_logs(0, "After setup_connection\n");
+
         send_uncommitted_chunks(commit_chunk_list, serverfd);
+
+        print_logs(0, "After send_uncommitted_chunks\n");
 
         // for (int i = 0; i < commit_chunk_list->n_chunks; i++)
         //     free(commit_chunk_list->chunks[i]);
         free(commit_chunk_list->path);
         free(commit_chunk_list);
 
+        print_logs(0, "After free(commit_chunk_list->path); free(commit_chunk_list);\n");
+
         for (int i = 0; i < chunk_list->n_chunks; i++)
+        {
             if (uncommited_chunks[i])
+            {
+                // for(int j = 0; j < uncommited_chunks[i]->n_replicas; j++)
+                // {
+                //     free(uncommited_chunks[i]->replicas[j]->ip);
+                //     free(uncommited_chunks[i]->replicas[j]);
+                // }
+                    
                 free(uncommited_chunks[i]);
+
+                print_logs(0, "After free(uncommited_chunks[%d])\n", i);
+            }
+                
+        }
         free(uncommited_chunks);
 
+        print_logs(0, "After free(uncommited_chunks)\n");
+
         chunk_list__free_unpacked(chunk_list, NULL);
+
+        print_logs(0, "After chunk_list__free_unpacked\n");
     }
 
     print_logs(1, "\nFile %s written (write-committed) successfully\n", path);

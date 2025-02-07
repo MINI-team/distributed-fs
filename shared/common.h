@@ -19,9 +19,7 @@
 #include <stdbool.h>
 #include "dfs.pb-c.h"
 
-// #define SERVER_PORT 18000
-
-#define MAX_FILENAME_LENGTH 201 // to be deleted
+#define MAX_FILENAME_LENGTH 201 // TODO: delete this concept
 //#define MASTER_ADDRESS "127.0.0.1"
 // #define MASTER_ADDRESS "server_container"
 // #define REPLICA_ADDRESS "replica_container"
@@ -66,23 +64,15 @@
 #define REPLICA_SERVER_PORT_4 8084
 #endif
 
-// #define DEBUG
-
-#define LOG_LEVEL 1
-
-// #define COM_DEF_LVL 7
-// #define MAS_DEF_LVL 6
-// #define REP_DEF_LVL 7
-// #define CLI_DEF_LVL 7
+#define LOG_LEVEL 3
 
 #define COM_DEF_LVL 6
 #define MAS_DEF_LVL 6
 #define REP_DEF_LVL 6
 #define CLI_DEF_LVL 6
 
-// #define CHUNK_SIZE 1
-
 #define CHUNK_SIZE 32000000
+// #define CHUNK_SIZE 4
 
 // #define MAX_THREADS_COUNT 1
 #define MAX_THREADS_COUNT 16 // CAUTION: probably shouldn't exceed thread count of the CPU (nproc command to check that)

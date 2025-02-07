@@ -20,12 +20,14 @@ char master_ip[IP_LENGTH] = "127.0.0.1";
 void handle_new_connection(int epoll_fd, int server_socket)
 {   
     int client_socket;
-    print_logs(1, "\n============================================================================\n");
-    print_logs(1, "New client connected\n");
+
     if ((client_socket = accept(server_socket, (SA *)NULL, NULL)) < 0)
     {
         err_n_die("Server couldnt accept client");
     }
+
+    print_logs(1, "\n============================================================================\n");
+    print_logs(1, "New client %d connected\n", client_socket);
 
     event_data_t *client_event_data = (event_data_t *)malloc(sizeof(event_data_t));
     if (!client_event_data)
@@ -53,6 +55,8 @@ void handle_new_connection(int epoll_fd, int server_socket)
         err_n_die("epoll_ctl error"); 
 
     set_fd_nonblocking(client_socket);
+
+    print_logs(1, "After handle_new_connection\n");
 }
 
 void setup_outbound(int epoll_fd, event_data_t *event_data, ChunkList *chunk_list)
@@ -138,13 +142,13 @@ int round_robin(replicas_data_t *replicas_data)
     while (!is_alive[rand_ind] || already_used[rand_ind])
     {
         if (!is_alive[rand_ind])
-            print_logs(3, "Replica %d is dead, incrementing rand_ind\n", all_replicas[rand_ind]->port);
+            print_logs(4, "Replica %d is dead, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         if (already_used[rand_ind])
-            print_logs(3, "Replica %d is already_used, incrementing rand_ind\n", all_replicas[rand_ind]->port);
+            print_logs(4, "Replica %d is already_used, incrementing rand_ind\n", all_replicas[rand_ind]->port);
         rand_ind = (rand_ind + 1) % replicas_count;
     }
 
-    print_logs(3, "\nReplica %d assigned\n\n", all_replicas[rand_ind]->port);
+    print_logs(4, "Replica %d assigned\n", all_replicas[rand_ind]->port);
 
     *replica_robin_index = (*replica_robin_index + 1) % replicas_count;
 
@@ -238,7 +242,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
         if (!fileRequestWrite)
             err_n_die("protobuf unpack error");
         
-        print_logs(1, "Received write request for file %s\n", fileRequestWrite->path);
+        print_logs(1, "Master received WRITE(/-COMMITTED) request for file %s\n", fileRequestWrite->path);
 
         print_logs(MAS_DEF_LVL, "fileRequestWrite->path: %s\n", fileRequestWrite->path);
         print_logs(MAS_DEF_LVL, "fileRequestWrite->size: %ld\n", fileRequestWrite->size);
@@ -269,25 +273,25 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     }
     else if (op_type == 'r')
     {
-        print_logs(MAS_DEF_LVL, "read request detected \n"); 
-        FileRequestRead *FileRequestRead = file_request_read__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
-        print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", FileRequestRead->path);
-        ChunkList* chunk_list = g_hash_table_lookup(hash_table, FileRequestRead->path);
+        FileRequestRead *fileRequestRead = file_request_read__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
+        print_logs(MAS_DEF_LVL, "fileRequest->path: %s\n", fileRequestRead->path);
+        print_logs(1, "Master received READ request for file %s\n", fileRequestRead->path);
+        ChunkList* chunk_list = g_hash_table_lookup(hash_table, fileRequestRead->path);
         
         if (!chunk_list || !chunk_list->committed)
         {
-            print_logs(1, "File %s was null or uncommitted\n", FileRequestRead->path);
+            print_logs(1, "File %s was null or uncommitted\n", fileRequestRead->path);
             setup_outbound(epoll_fd, event_data, chunk_list);
         }
         else
         {
             setup_outbound(epoll_fd, event_data, chunk_list);
-            print_logs(MAS_DEF_LVL, "File %s not found \n", FileRequestRead->path);
+            print_logs(MAS_DEF_LVL, "File %s not found \n", fileRequestRead->path);
         }
     }
     else if(op_type == 'n')
     {
-        print_logs(MAS_DEF_LVL, "new replica request detected \n");
+        print_logs(1, "Master received NEW REPLICA request\n");
         NewReplica *replica = new_replica__unpack(NULL, event_data->peer_data->payload_size - 1, event_data->peer_data->buffer + 1);
 
         for (int i = 0; i < *replicas_count; i++)
@@ -337,13 +341,13 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
     }
     else if (op_type == 'c')
     {
-        print_logs(1, "Master received commit request\n");
-
         ChunkList *commit_chunk_list = chunk_list__unpack(
             NULL, 
             event_data->peer_data->payload_size - 1, 
             event_data->peer_data->buffer + 1
         );
+
+        print_logs(1, "Master received COMMIT request for file %s\n", commit_chunk_list->path);
 
         if (!commit_chunk_list)
             err_n_die("commit_chunk_list is NULL");
@@ -355,6 +359,10 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
             print_logs(1, "No uncommited chunks\nFile %s fully committed\n", commit_chunk_list->path);
             chunk_list->committed = true;
             chunk_list__free_unpacked(commit_chunk_list, NULL);
+            print_logs(2, "commit_chunk_list freed\n");
+
+            // disconnect_client(epoll_fd, event_data, event_data->peer_data->client_socket);
+            // print_logs(2, "Client disconnected (after full commit)\n");
             return;
         }
 
@@ -365,8 +373,8 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 if (is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] == true)
                 {
                    (*total_alive_replicas)--;
-                   print_logs(1, "From chunk %d replica %d detected as dead, decrementing total_alive_replicas to %d\n",
-                                     commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->replicas[j]->port, (*total_alive_replicas));
+                   print_logs(1, "From file %s, chunk %d replica %d detected as dead, decrementing total_alive_replicas to %d\n",
+                                     commit_chunk_list->path, commit_chunk_list->chunks[i]->chunk_id, commit_chunk_list->chunks[i]->replicas[j]->port, (*total_alive_replicas));
                 }
                 is_alive[commit_chunk_list->chunks[i]->replicas[j]->id] = false;
             }
@@ -390,15 +398,15 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 }
             }
 
-            print_logs(1, "Chunk %d wasn't fully committed; faulty replicas:\n", cur_chunk_id);
-            for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
-            {
-                print_logs(1, "IP: %s, port %d\n", 
-                            commit_chunk_list->chunks[i]->replicas[j]->ip,
-                            commit_chunk_list->chunks[i]->replicas[j]->port);
-            }
+            // print_logs(1, "Chunk %d wasn't fully committed; faulty replicas:\n", cur_chunk_id);
+            // for (int j = 0; j < commit_chunk_list->chunks[i]->n_replicas; j++)
+            // {
+            //     print_logs(1, "IP: %s, port %d\n", 
+            //                 commit_chunk_list->chunks[i]->replicas[j]->ip,
+            //                 commit_chunk_list->chunks[i]->replicas[j]->port);
+            // }
 
-            print_logs(1, "\nChunk %d new replicas:\n", i);
+            print_logs(1, "\n\nFile %s, chunk %d changing replicas:\n", commit_chunk_list->path, cur_chunk_id);
 
             int replica_ind_ccl = 0; // ccl - commit_chunk_list
             for (int j = 0; j < chunk_list->chunks[cur_chunk_id]->n_replicas; j++)
@@ -410,7 +418,7 @@ void process_request(int epoll_fd, event_data_t *event_data, replicas_data_t *re
                 {
                     print_logs(1, "Faulty replica %d:   IP: %s, port: %d\n",
                                 j+1, chunk_list->chunks[cur_chunk_id]->replicas[j]->ip, chunk_list->chunks[cur_chunk_id]->replicas[j]->port);
-                    print_logs(3, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
+                    print_logs(4, "\nround_robin for chunk %d, replica %d\n", cur_chunk_id, cur_replica_id);
                     int new_replica_ind = round_robin(replicas_data);
                     if (new_replica_ind == -1)
                     {
@@ -557,7 +565,7 @@ void handle_client(int epoll_fd, event_data_t *event_data, replicas_data_t *repl
 
     if (bytes_read == 0)
     {
-        print_logs(MAS_DEF_LVL, "Client %d disconnected \n", client_socket);
+        print_logs(3, "Client %d disconnected (bytes_read == 0)\n", client_socket);
         disconnect_client(epoll_fd, event_data, client_socket);
         return;
     }
