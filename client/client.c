@@ -735,6 +735,7 @@ void do_write_commit(char *path)
                 //     free(uncommited_chunks[i]->replicas[j]);
                 // }
                     
+                // free(uncommited_chunks[i]->path);
                 free(uncommited_chunks[i]);
 
                 print_logs(0, "After free(uncommited_chunks[%d])\n", i);
